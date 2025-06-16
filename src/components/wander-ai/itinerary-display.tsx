@@ -91,9 +91,8 @@ function parseItinerary(itineraryText: string): Section[] {
     if (!matchedKeyword && currentSection) {
       currentSection.content.push(line.trim());
     } else if (!matchedKeyword && !currentSection) {
-      // If content appears before any recognized section, group it under "Overview"
       if (sections.length === 0 || sections[sections.length-1].title !== "Overview") {
-         if (currentSection) sections.push(currentSection); // Push previous if any
+         if (currentSection) sections.push(currentSection); 
         currentSection = { title: "Overview", icon: BookOpenText, content: [] };
       }
       currentSection!.content.push(line.trim());
@@ -104,7 +103,6 @@ function parseItinerary(itineraryText: string): Section[] {
     sections.push(currentSection);
   }
   
-  // Fallback if no sections were parsed but there's text
   if (sections.length === 0 && itineraryText.trim() !== "") {
     sections.push({ title: "Generated Itinerary", icon: BookOpenText, content: itineraryText.split('\n').filter(l => l.trim() !== '') });
   }
@@ -167,7 +165,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgProps = pdf.getImageProperties(imgData);
-      const pdfMargin = 10; // 10mm margin
+      const pdfMargin = 10; 
       const pdfWidth = pdf.internal.pageSize.getWidth() - 2 * pdfMargin;
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       const pageHeight = pdf.internal.pageSize.getHeight() - 2 * pdfMargin;
@@ -218,26 +216,39 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   const otherSections = parsedSections.filter(s => !s.isDaySection);
 
   const renderContent = (contentLines: string[]) => {
-    const listItems: string[] = [];
-    const otherContent: string[] = [];
-    contentLines.forEach(line => {
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        listItems.push(line.substring(2).trim());
-      } else if (line.trim()) { // Ensure only non-empty lines are pushed
-        otherContent.push(line.trim());
+    const elements: JSX.Element[] = [];
+    let currentListItems: string[] = [];
+  
+    const flushList = () => {
+      if (currentListItems.length > 0) {
+        elements.push(
+          <ul key={`ul-${elements.length}`} className="list-disc list-inside pl-3 my-2 space-y-1 font-body text-foreground/90">
+            {currentListItems.map((item, idx) => <li key={`li-${idx}`}>{item}</li>)}
+          </ul>
+        );
+        currentListItems = [];
+      }
+    };
+  
+    contentLines.forEach((line) => {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ')) {
+        currentListItems.push(trimmedLine.substring(2).trim());
+      } else {
+        flushList(); 
+        if (trimmedLine) { 
+          elements.push(
+            <p key={`p-${elements.length}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
+              {trimmedLine}
+            </p>
+          );
+        }
       }
     });
-
-    return (
-      <div className="space-y-3"> {/* Increased space for better separation */}
-        {otherContent.map((line, idx) => <p key={`p-${idx}`} className="text-foreground/90 font-body leading-relaxed whitespace-pre-line">{line}</p>)}
-        {listItems.length > 0 && (
-          <ul className="list-disc list-inside pl-3 space-y-1.5 font-body text-foreground/90"> {/* Slightly more padding and list item space */}
-            {listItems.map((item, idx) => <li key={`li-${idx}`}>{item}</li>)}
-          </ul>
-        )}
-      </div>
-    );
+  
+    flushList(); 
+  
+    return <>{elements}</>;
   };
 
   return (
@@ -290,7 +301,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         )}
 
         <ScrollArea className="h-[600px] p-1 rounded-md border border-border">
-          <div ref={itineraryContentRef} className="p-4 bg-white text-black"> {/* Ensures PDF content has white background and black text */}
+          <div ref={itineraryContentRef} className="p-4 bg-white text-black">
             {otherSections.map((section, idx) => (
               <div key={`other-${idx}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                 <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -305,14 +316,14 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
               <Accordion type="multiple" className="w-full" defaultValue={daySections.map((_,idx) => `day-${idx}`)}>
                 {daySections.map((section, idx) => (
                   <AccordionItem value={`day-${idx}`} key={`day-${idx}`} className="mb-2 border-b-0 last:mb-0">
-                     <Card className="shadow-sm overflow-hidden"> {/* Added overflow-hidden to card */}
+                     <Card className="shadow-sm overflow-hidden">
                         <AccordionTrigger className="p-4 hover:no-underline bg-background hover:bg-secondary/50 transition-colors rounded-t-lg">
                           <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
                             <section.icon className="mr-3 h-6 w-6 text-primary/80" />
                             {section.title}
                           </h3>
                         </AccordionTrigger>
-                        <AccordionContent className="p-4 pt-2 bg-background rounded-b-lg border-t border-border"> {/* Added pt-2 for less space after trigger */}
+                        <AccordionContent className="p-4 pt-2 bg-background rounded-b-lg border-t border-border">
                           {renderContent(section.content)}
                         </AccordionContent>
                      </Card>
@@ -320,7 +331,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 ))}
               </Accordion>
             )}
-            {/* Fallback for when no specific sections (days or others) are parsed */}
             {daySections.length === 0 && otherSections.length === 0 && itinerary && itinerary.trim() !== "" && (
                  <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                     <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
