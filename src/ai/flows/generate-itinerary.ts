@@ -35,9 +35,14 @@ const prompt = ai.definePrompt({
   name: 'generateItineraryPrompt',
   input: {schema: GenerateItineraryInputSchema},
   output: {schema: GenerateItineraryOutputSchema},
-  prompt: `You are a travel expert. Generate a personalized travel itinerary based on the following information:
+  prompt: `You are a travel expert. Your task is to generate a personalized travel itinerary.
 
-Destination: {{{destination}}}
+First, review the provided 'Destination': {{{destination}}}.
+If the destination seems misspelled, ambiguous (e.g., a general country name instead of a city), or unclear, please use your knowledge to infer the most likely specific, well-known travel destination. For example, if 'Parris' is provided, assume 'Paris, France'. If 'US' is provided, you might choose a major city like 'New York City, USA' or state that more specificity is needed if you cannot confidently choose.
+
+If you make such a correction or assumption, please clearly state the destination you are generating the itinerary for at the very beginning of the 'Overview' section. For example: "Overview: This itinerary is for Paris, France. A 5-day trip focusing on..."
+
+Then, generate the itinerary based on this (potentially corrected) destination and the following user preferences:
 Interests: {{{interests}}}
 Currency: {{{currency}}}
 Budget: {{{budgetAmount}}} {{{currency}}}
@@ -45,23 +50,24 @@ Duration: {{{duration}}} days
 
 Create a detailed day-by-day itinerary including:
 - Suggested activities and attractions
-- Food recommendations
-- Hotel suggestions
-- Local tips and advice
+- Food recommendations (mention types of cuisine or specific restaurants if possible)
+- Hotel suggestions (mention types of hotels or specific examples if possible)
+- Local tips and advice (e.g., transportation, safety, etiquette)
 
-IMPORTANT: Present the itinerary as a continuous block of human-readable text. Do NOT format the output as a JSON object.
-Use headings for days (e.g., "Day 1: Arrival and Exploration") and sub-headings (e.g., "Activities:", "Food:", "Hotel Suggestions:", "Local Tips:") or bullet points for details within each day.
+IMPORTANT: Present the entire itinerary as a continuous block of human-readable text. Do NOT format the output as a JSON object.
+Use a main heading for "Overview" and for each day (e.g., "Day 1: Arrival and Exploration").
+Within each day, use sub-headings (e.g., "Activities:", "Food:", "Hotel Suggestions:", "Local Tips:") or bullet points for details.
 
-For example:
+Example Structure:
 
 Overview:
-A brief summary of the trip.
+(If a correction was made, start with "This itinerary is for [Corrected Destination Name].") A brief summary of the trip, highlighting key experiences.
 
 Day 1: Arrival and City Exploration
 Activities:
 - Arrive at the destination, check into your hotel.
 - Take a walking tour of the city center.
-- Visit the main historical site.
+- Visit [Main Historical Site].
 Food:
 - Lunch at [Restaurant Name] (cuisine type).
 - Dinner at [Restaurant Name] (cuisine type).
@@ -78,7 +84,12 @@ Activities:
 Food:
 - Try local street food for lunch.
 - Fine dining experience at [Restaurant Name].
-...and so on for all days.
+Hotel Suggestions:
+- [Hotel Name example]
+Local Tips:
+- [Tip example]
+
+...and so on for all {{{duration}}} days.
 
 Ensure the output is a single block of text with clear formatting as described.
 `,
@@ -95,3 +106,4 @@ const generateItineraryFlow = ai.defineFlow(
     return output!;
   }
 );
+
