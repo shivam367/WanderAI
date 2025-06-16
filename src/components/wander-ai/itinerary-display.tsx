@@ -30,7 +30,7 @@ interface ItineraryDisplayProps {
   setIsRefining: (refining: boolean) => void;
   onItineraryRefined: (refinedItinerary: string) => void;
   error: string | null;
-  canRefine?: boolean; // New prop to control refine button visibility
+  canRefine?: boolean;
 }
 
 interface Section {
@@ -58,10 +58,10 @@ const sectionKeywords: Record<string, { title: string, icon: React.ElementType, 
 
 function parseItinerary(itineraryText: string): Section[] {
   const parsedSections: Section[] = [];
-  const lines = itineraryText.split('\n').filter(line => line.trim() !== '' || line === ''); // Keep empty lines for pre-wrap effect
+  const lines = itineraryText.split('\n').filter(line => line.trim() !== '' || line === ''); 
 
   let currentSection: Section | null = null;
-  let currentPrimaryTitle = "Introduction"; // Default for content before first Day/Overview
+  let currentPrimaryTitle = "Introduction"; 
 
   const dayRegex = new RegExp(`^(Day\\s+\\d+.*?)[:]?$`, "i");
   const overviewRegex = new RegExp(`^(Overview)[:]?$`, "i");
@@ -98,7 +98,6 @@ function parseItinerary(itineraryText: string): Section[] {
 
     if (!isNewPrimarySectionStart) {
       if (!currentSection) {
-        // Initialize with the default/current primary title if no section started yet
         currentSection = {
           title: currentPrimaryTitle,
           icon: currentPrimaryTitle === "Overview" ? sectionKeywords["Overview"].icon : (currentPrimaryTitle.match(dayRegex) ? sectionKeywords["Day \\d+"].icon : BookOpenText),
@@ -283,10 +282,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     }
 
     setIsExportingPdf(true);
-
-    const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#87CEEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22h20"></path><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"></path></svg>`;
     let svgDataUrl = '';
 
+    const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#87CEEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22h20"></path><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"></path></svg>`;
     const svgContainer = document.createElement('div');
     svgContainer.style.position = 'absolute';
     svgContainer.style.left = '-9999px';
@@ -299,18 +297,19 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     try {
       const svgCanvas = await html2canvas(svgContainer, {
         backgroundColor: null, // Transparent background for PNG
-        width: 64,
+        width: 64, // Capture at defined 64x64 size
         height: 64,
-        scale: 1, // Capture at defined 64x64 size
+        scale: 1, // Capture at 1:1 pixel size
       });
       svgDataUrl = svgCanvas.toDataURL('image/png');
     } catch (e) {
-      console.error("Error converting SVG to canvas image:", e);
-      toast({ title: "PDF Export Error", description: "Could not render logo for PDF.", variant: "destructive" });
+      console.error("Error converting SVG logo to canvas image:", e);
+      toast({ title: "PDF Export Error", description: "Could not render logo for PDF. Check console for details.", variant: "destructive" });
     } finally {
-      document.body.removeChild(svgContainer);
+      if (document.body.contains(svgContainer)) {
+        document.body.removeChild(svgContainer);
+      }
     }
-
 
     if (!itineraryContentRef.current) {
         setIsExportingPdf(false);
@@ -319,14 +318,37 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     }
 
     try {
+      // Temporarily expand ScrollArea height for full content capture
+      const originalScrollAreaHeight = itineraryContentRef.current.style.height;
+      const originalScrollAreaOverflow = itineraryContentRef.current.style.overflowY;
+      itineraryContentRef.current.style.height = 'auto';
+      itineraryContentRef.current.style.overflowY = 'visible';
+      
+      // Ensure parent of ScrollArea's direct child (the content div) is also unconstrained if needed
+      const scrollViewport = itineraryContentRef.current.querySelector('div[data-radix-scroll-area-viewport]') as HTMLElement | null;
+      let originalViewportHeight = '';
+      if (scrollViewport) {
+        originalViewportHeight = scrollViewport.style.height;
+        scrollViewport.style.height = 'auto';
+      }
+
       const mainContentCanvas = await html2canvas(itineraryContentRef.current, {
-        scale: 2,
+        scale: 2, // Increase scale for better quality
         useCORS: true,
-        backgroundColor: '#ffffff',
+        backgroundColor: '#ffffff', // Capture with white background
+        // Ensure html2canvas captures the full scroll height
+        height: itineraryContentRef.current.scrollHeight,
         windowHeight: itineraryContentRef.current.scrollHeight,
-        windowWidth: itineraryContentRef.current.scrollWidth,
-        scrollY: 0,
+        y: 0, // Start capture from the top
       });
+
+      // Restore ScrollArea height
+      itineraryContentRef.current.style.height = originalScrollAreaHeight;
+      itineraryContentRef.current.style.overflowY = originalScrollAreaOverflow;
+      if (scrollViewport) {
+        scrollViewport.style.height = originalViewportHeight;
+      }
+
       const mainImgData = mainContentCanvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const mainImgProps = pdf.getImageProperties(mainImgData);
@@ -334,38 +356,33 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const ptToMm = (pt: number) => pt * 0.352778;
 
       const pageMarginMm = 10;
-      const headerSideMarginMm = pageMarginMm;
       const headerTopMarginMm = pageMarginMm;
+      const headerSideMarginMm = pageMarginMm; // For top-left
 
-      // Logo and Text settings
       const logoPdfWidthMm = 10;
       const logoPdfHeightMm = 10;
-      const textSpacingMm = 2; // Space between logo and app name
+      const textSpacingMm = 2; 
 
       const appNameText = "WanderAI";
       const taglineText = "Your Personal AI Travel Planner";
       const appNameFontSizePt = 12;
       const taglineFontSizePt = 8;
-
-      // Calculate Y baselines for header text
+      
       const logoBottomYMm = headerTopMarginMm + logoPdfHeightMm;
-      // Align app name text with the vertical center of the logo image for better visual balance
       const appNameBaselineYMm = headerTopMarginMm + (logoPdfHeightMm / 2) + (ptToMm(appNameFontSizePt) * 0.35); // Approx center
-      const taglineBaselineYMm = appNameBaselineYMm + ptToMm(taglineFontSizePt) + ptToMm(1); // 1mm gap
+      const taglineBaselineYMm = appNameBaselineYMm + ptToMm(taglineFontSizePt) + ptToMm(1); 
 
-      // Determine header bottom to calculate where main content starts
-      // The header bottom will be the max of logo bottom or tagline bottom.
-      const headerBottomYMm = Math.max(logoBottomYMm, taglineBaselineYMm + ptToMm(taglineFontSizePt * 0.25));
+      const headerBottomYMm = Math.max(logoBottomYMm, taglineBaselineYMm + ptToMm(taglineFontSizePt * 0.25)); // Max height of header elements
       const contentStartYOnPageMm = headerBottomYMm + 5; // 5mm gap below header
 
-      // Main content image strip dimensions on PDF page
       const imageStripWidthOnPageMm = pdf.internal.pageSize.getWidth() - 2 * pageMarginMm;
       const totalImageStripHeightPdfUnits = (mainImgProps.height * imageStripWidthOnPageMm) / mainImgProps.width;
 
       let currentImagePartYSrcPixels = 0;
       let pageNumber = 0;
+      const maxPages = 50; // Safety break
 
-      while (currentImagePartYSrcPixels < mainImgProps.height) {
+      while (currentImagePartYSrcPixels < mainImgProps.height && pageNumber < maxPages) {
         if (pageNumber > 0) {
           pdf.addPage();
         }
@@ -374,31 +391,30 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         const currentPageHeightMm = pdf.internal.pageSize.getHeight();
 
         // --- START PDF HEADER (Top Left) ---
-        // 1. Draw Logo Image (if available)
         if (svgDataUrl) {
           try {
             pdf.addImage(svgDataUrl, 'PNG', headerSideMarginMm, headerTopMarginMm, logoPdfWidthMm, logoPdfHeightMm);
           } catch (e) {
-            console.error("Error adding SVG image to PDF:", e);
-             // Fallback: draw a simple square if logo addImage fails
-            pdf.setFillColor(135, 206, 235); // Sky Blue
-            pdf.rect(headerSideMarginMm, headerTopMarginMm, logoPdfWidthMm, logoPdfHeightMm, 'F');
+            console.error("Error adding SVG image to PDF (page " + pageNumber + "):", e);
+            pdf.setFont("Helvetica", "normal");
+            pdf.setFontSize(8);
+            pdf.setTextColor(150, 0, 0); // Red for error
+            pdf.text("[LOGO ERR]", headerSideMarginMm, headerTopMarginMm + logoPdfHeightMm/2);
+            pdf.setTextColor(0,0,0); // Reset color
           }
         } else {
-           // Fallback: draw a simple square if no svgDataUrl
-          pdf.setFillColor(135, 206, 235); // Sky Blue
-          pdf.rect(headerSideMarginMm, headerTopMarginMm, logoPdfWidthMm, logoPdfHeightMm, 'F');
+          pdf.setFont("Helvetica", "normal");
+          pdf.setFontSize(8);
+          pdf.setTextColor(128, 128, 128); // Gray for placeholder
+          pdf.text("[LOGO]", headerSideMarginMm, headerTopMarginMm + logoPdfHeightMm/2);
         }
 
-
-        // 2. Draw App Name
         pdf.setFont("Helvetica", "bold");
         pdf.setFontSize(appNameFontSizePt);
-        pdf.setTextColor(135, 206, 235); // Sky Blue
+        pdf.setTextColor(135, 206, 235); // Sky Blue (#87CEEB)
         const appNameXMm = headerSideMarginMm + logoPdfWidthMm + textSpacingMm;
         pdf.text(appNameText, appNameXMm, appNameBaselineYMm);
 
-        // 3. Draw Tagline
         pdf.setFont("Helvetica", "normal");
         pdf.setFontSize(taglineFontSizePt);
         pdf.setTextColor(105, 105, 105); // Dim Gray
@@ -408,34 +424,39 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
 
         pdf.setTextColor(0, 0, 0); // Reset text color for main content
 
-        const pageRenderableHeightForImageMm = currentPageHeightMm - contentStartYOnPageMm - pageMarginMm;
+        const pageRenderableHeightForImageMm = currentPageHeightMm - contentStartYOnPageMm - pageMarginMm; // Space for content on current page
         const scrollAmountPdfUnits = (currentImagePartYSrcPixels / mainImgProps.height) * totalImageStripHeightPdfUnits;
-        const yOffsetForImageStripMm = contentStartYOnPageMm - scrollAmountPdfUnits;
+        const yOffsetForImageStripMm = contentStartYOnPageMm - scrollAmountPdfUnits; // This defines where the "top" of the full image strip is placed on the current PDF page
 
         pdf.addImage(mainImgData, 'PNG',
-          pageMarginMm,
-          yOffsetForImageStripMm,
-          imageStripWidthOnPageMm,
-          totalImageStripHeightPdfUnits
+          pageMarginMm, // X position of image strip
+          yOffsetForImageStripMm, // Y position of image strip
+          imageStripWidthOnPageMm, // Width of image strip on PDF page
+          totalImageStripHeightPdfUnits // Total height of the full image strip if rendered at imageStripWidthOnPageMm
         );
-
+        
         if (totalImageStripHeightPdfUnits > 0) {
-          currentImagePartYSrcPixels += (pageRenderableHeightForImageMm / totalImageStripHeightPdfUnits) * mainImgProps.height;
+           currentImagePartYSrcPixels += (pageRenderableHeightForImageMm / totalImageStripHeightPdfUnits) * mainImgProps.height;
         } else {
-          currentImagePartYSrcPixels = mainImgProps.height; // Should not happen if imgProps.height > 0
+           currentImagePartYSrcPixels = mainImgProps.height; // Should not happen if imgProps.height > 0
         }
 
-        if (pageNumber > 50) {
-          toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
-          break;
-        }
+      }
+      if (pageNumber >= maxPages) {
+         toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
       }
 
       pdf.save('wanderai-itinerary.pdf');
       toast({ title: "Export Successful", description: "Your itinerary has been downloaded as a PDF.", className: "bg-primary text-primary-foreground" });
     } catch (err) {
       console.error("Error exporting PDF:", err);
-      toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF.", variant: "destructive"});
+      toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF. Check console.", variant: "destructive"});
+       // Restore ScrollArea height on error too
+      itineraryContentRef.current.style.height = originalScrollAreaHeight;
+      itineraryContentRef.current.style.overflowY = originalScrollAreaOverflow;
+      if (scrollViewport) {
+        scrollViewport.style.height = originalViewportHeight;
+      }
     } finally {
       setIsExportingPdf(false);
     }
@@ -519,58 +540,62 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         )}
 
         <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
+           {/* The ScrollArea's height is now controlled by isExportingPdf state indirectly via its child's styling */}
           <ScrollArea className={`p-1 ${isExportingPdf ? 'h-auto overflow-y-visible' : 'h-[600px] overflow-y-auto'}`}>
-            {introSection && (
-                 <div key={`intro-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
-                    <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
-                        <introSection.icon className="mr-3 h-6 w-6 text-primary/80" />
-                        {introSection.title}
-                    </h3>
-                    {renderContent(introSection.content)}
-                 </div>
-            )}
-            {otherSections.map((section, idx) => (
-              <div key={`other-${idx}-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
-                <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
-                  <section.icon className="mr-3 h-6 w-6 text-primary/80" />
-                  {section.title}
-                </h3>
-                {renderContent(section.content)}
-              </div>
-            ))}
+            {/* This div is the direct child of ScrollArea and what html2canvas will target. */}
+            {/* Its styling might need to be adjusted by the `isExportingPdf` state if necessary. */}
+            <div className={`${isExportingPdf ? 'h-auto' : ''}`}> 
+              {introSection && (
+                  <div key={`intro-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
+                      <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
+                          <introSection.icon className="mr-3 h-6 w-6 text-primary/80" />
+                          {introSection.title}
+                      </h3>
+                      {renderContent(introSection.content)}
+                  </div>
+              )}
+              {otherSections.map((section, idx) => (
+                <div key={`other-${idx}-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
+                  <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
+                    <section.icon className="mr-3 h-6 w-6 text-primary/80" />
+                    {section.title}
+                  </h3>
+                  {renderContent(section.content)}
+                </div>
+              ))}
 
-            {daySections.length > 0 && (
-              <Accordion type="multiple" className="w-full" defaultValue={daySections.map((_,idx) => `day-${idx}`)}>
-                {daySections.map((section, idx) => (
-                  <AccordionItem value={`day-${idx}`} key={`day-${idx}-${Date.now()}`} className="mb-2 border-b-0 last:mb-0">
-                     <Card className="shadow-sm overflow-hidden bg-background text-foreground">
-                        <AccordionTrigger className="p-4 hover:no-underline hover:bg-secondary/50 transition-colors rounded-t-lg">
-                          <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
-                            <section.icon className="mr-3 h-6 w-6 text-primary/80" />
-                            {section.title}
-                          </h3>
-                        </AccordionTrigger>
-                        <AccordionContent className="p-4 pt-2 rounded-b-lg border-t border-border">
-                          {renderContent(section.content)}
-                        </AccordionContent>
-                     </Card>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            )}
-            {daySections.length === 0 && otherSections.length === 0 && !introSection && itinerary && itinerary.trim() !== "" && (
-                 <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
-                    <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
-                        <BookOpenText className="mr-3 h-6 w-6 text-primary/80" />
-                        Generated Itinerary
-                    </h3>
-                    {renderContent(itinerary.split('\n'))}
-                 </div>
-            )}
+              {daySections.length > 0 && (
+                <Accordion type="multiple" className="w-full" defaultValue={daySections.map((_,idx) => `day-${idx}`)}>
+                  {daySections.map((section, idx) => (
+                    <AccordionItem value={`day-${idx}`} key={`day-${idx}-${Date.now()}`} className="mb-2 border-b-0 last:mb-0">
+                      <Card className="shadow-sm overflow-hidden bg-background text-foreground">
+                          <AccordionTrigger className="p-4 hover:no-underline hover:bg-secondary/50 transition-colors rounded-t-lg">
+                            <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
+                              <section.icon className="mr-3 h-6 w-6 text-primary/80" />
+                              {section.title}
+                            </h3>
+                          </AccordionTrigger>
+                          <AccordionContent className="p-4 pt-2 rounded-b-lg border-t border-border">
+                            {renderContent(section.content)}
+                          </AccordionContent>
+                      </Card>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
+              {daySections.length === 0 && otherSections.length === 0 && !introSection && itinerary && itinerary.trim() !== "" && (
+                  <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
+                      <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
+                          <BookOpenText className="mr-3 h-6 w-6 text-primary/80" />
+                          Generated Itinerary
+                      </h3>
+                      {renderContent(itinerary.split('\n'))}
+                  </div>
+              )}
+            </div> {/* End of content div for html2canvas target */}
           </ScrollArea>
         </div>
       </CardContent>
     </Card>
   );
 }
-
