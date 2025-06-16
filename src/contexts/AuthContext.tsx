@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const user = apiGetCurrentUser();
     setCurrentUser(user);
     setIsLoading(false);
-  }, []);
+  }, [setIsLoading, setCurrentUser]); // Explicitly list stable setters, apiGetCurrentUser is stable import
 
   useEffect(() => {
     fetchCurrentUser();
