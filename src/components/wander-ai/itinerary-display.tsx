@@ -122,6 +122,70 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     defaultValues: { userFeedback: "" },
   });
 
+  // Helper to process a line for bold text and return an array of React nodes
+  const processLineForBold = (line: string, keyPrefix: string): React.ReactNode[] => {
+    const parts = line.split(/(\*\*.*?\*\*)/g); // Split by bold markers, keeping them
+    return parts.filter(part => part.length > 0) // Remove empty strings from split
+      .map((part, idx) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          // If it's a bold part, remove the asterisks and wrap in <strong> 
+          return <strong key={`${keyPrefix}-bold-${idx}`}>{part.slice(2, -2)}</strong>;
+        }
+        // Otherwise, return the text part as is
+        return part;
+      });
+  };
+  
+  const renderContent = (contentLines: string[]): JSX.Element[] => {
+    const elements: JSX.Element[] = [];
+    let currentListItemGroup: React.ReactNode[][] = []; // Stores React.ReactNode[] for each <li>
+
+    const flushList = () => {
+      if (currentListItemGroup.length > 0) {
+        elements.push(
+          <ul key={`ul-${elements.length}`} className="list-disc list-inside pl-4 my-2 space-y-1 font-body text-foreground/90">
+            {currentListItemGroup.map((listItemContent, idx) => (
+              <li key={`li-item-${elements.length}-${idx}`}>{listItemContent}</li>
+            ))}
+          </ul>
+        );
+        currentListItemGroup = [];
+      }
+    };
+
+    contentLines.forEach((line, lineIdx) => {
+      const trimmedLine = line.trim();
+      // Regex to identify list markers (-, *, •, or number./number)) and capture content AFTER the marker
+      const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s+(.*)/;
+      const listMatch = trimmedLine.match(listRegex);
+
+      if (listMatch) {
+        const listItemText = listMatch[1].trim(); // Get the actual text content of the list item
+        if (listItemText) { // Only add if there's actual content for the list item
+          currentListItemGroup.push(processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`));
+        }
+      } else {
+        flushList(); // Not a list item, so finalize any pending list
+        if (trimmedLine) { // If the line is not empty after trimming, treat it as a paragraph
+          elements.push(
+            <p key={`p-${elements.length}-line-${lineIdx}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
+              {processLineForBold(trimmedLine, `p-content-${elements.length}-line-${lineIdx}`)}
+            </p>
+          );
+        }
+      }
+    });
+
+    flushList(); // Ensure any trailing list items are rendered after the loop
+
+    if (elements.length === 0) {
+        // This covers cases where contentLines was empty or contained only whitespace or empty list items.
+        return [<p key="no-details-provided" className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
+    }
+    return elements;
+  };
+
+
   const onRefineSubmit: SubmitHandler<RefineFormInputType> = async (data) => {
     if (!itinerary) {
       toast({ title: "Error", description: "No itinerary to refine.", variant: "destructive" });
@@ -160,7 +224,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const canvas = await html2canvas(itineraryContentRef.current, { 
         scale: 2, 
         useCORS: true, 
-        backgroundColor: '#ffffff',
+        backgroundColor: '#ffffff', // Explicitly set background to white for PDF
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -177,7 +241,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
-        position = heightLeft - pdfHeight + pdfMargin;
+        position = heightLeft - pdfHeight + pdfMargin; // Adjust position for subsequent pages
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pdfMargin, position, pdfWidth, pdfHeight);
         heightLeft -= pageHeight;
@@ -215,62 +279,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   const daySections = parsedSections.filter(s => s.isDaySection);
   const otherSections = parsedSections.filter(s => !s.isDaySection);
 
-  const renderContent = (contentLines: string[]): JSX.Element[] => {
-    const elements: JSX.Element[] = [];
-    let currentListItems: string[] = [];
-
-    const processLineForBold = (line: string): React.ReactNode[] => {
-      // Split by markdown bold (e.g., **text**) and retain the delimiters for reconstruction
-      const parts = line.split(/(\*\*.*?\*\*)/g);
-      return parts.map((part, idx) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          // If it's a bold part, remove the asterisks and wrap in <strong>
-          return <strong key={`bold-${elements.length}-${idx}`}>{part.slice(2, -2)}</strong>;
-        }
-        // Otherwise, return the text part as is
-        return part;
-      });
-    };
-  
-    const flushList = () => {
-      if (currentListItems.length > 0) {
-        elements.push(
-          <ul key={`ul-${elements.length}`} className="list-disc list-inside pl-3 my-2 space-y-1 font-body text-foreground/90">
-            {currentListItems.map((item, idx) => (
-              <li key={`li-${elements.length}-${idx}`}>{processLineForBold(item)}</li>
-            ))}
-          </ul>
-        );
-        currentListItems = [];
-      }
-    };
-  
-    contentLines.forEach((line) => {
-      const trimmedLine = line.trim();
-      // Regex to identify list markers: "-", "*", "•", or "number." / "number)"
-      if (/^(\s*(\-|\*|•)\s)|(^\s*\d+(\.|\))\s)/.test(trimmedLine)) {
-        // Remove the marker for display and add to current list
-        currentListItems.push(trimmedLine.replace(/^(\s*(\-|\*|•)\s)|(^\s*\d+(\.|\))\s)/, '').trim());
-      } else {
-        flushList(); // Render any pending list items before a paragraph
-        if (trimmedLine) { // Only render non-empty lines as paragraphs
-          elements.push(
-            <p key={`p-${elements.length}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
-              {processLineForBold(trimmedLine)}
-            </p>
-          );
-        }
-      }
-    });
-  
-    flushList(); // Ensure any trailing list items are rendered
-  
-    // If no content was parsed into elements (e.g., all lines were empty or just whitespace)
-    if (elements.length === 0) {
-        return [<p key="no-details" className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
-    }
-    return elements;
-  };
 
   return (
     <Card className="mt-12 w-full max-w-4xl mx-auto shadow-xl animate-slide-in-up bg-card/90 backdrop-blur-sm">
@@ -283,7 +291,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           <CardDescription className="font-body">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
         </div>
         <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
-          <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isExportingPdf}>
+          <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isExportingPdf || isRefining}>
             <Edit3 className="mr-2 h-4 w-4" /> {showRefineForm ? "Cancel Refine" : "Refine Itinerary"}
           </Button>
           <Button onClick={handleExportPdf} variant="outline" className="text-primary border-primary hover:bg-primary/10 font-body w-full sm:w-auto" disabled={isExportingPdf || isRefining}>
@@ -321,8 +329,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
 
+        {/* This div is what gets captured for PDF export */}
         <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
-          <ScrollArea className="h-[600px] p-1">
+          <ScrollArea className="h-[600px] p-1"> {/* Applied p-1 to scroll area if needed, or p-4 to its content */}
             {otherSections.map((section, idx) => (
               <div key={`other-${idx}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                 <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -352,6 +361,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 ))}
               </Accordion>
             )}
+            {/* Fallback for when there's itinerary text but it wasn't parsed into day/other sections */}
             {daySections.length === 0 && otherSections.length === 0 && itinerary && itinerary.trim() !== "" && (
                  <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                     <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -367,6 +377,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
+    
+
     
 
     
