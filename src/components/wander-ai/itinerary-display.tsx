@@ -100,16 +100,12 @@ function parseItinerary(itineraryText: string): Section[] {
       if (!currentSection) {
         // Initialize with the default/current primary title if no section started yet
         currentSection = {
-          title: currentPrimaryTitle, // Could be "Introduction" or a carried-over Day/Overview title
+          title: currentPrimaryTitle, 
           icon: currentPrimaryTitle === "Overview" ? sectionKeywords["Overview"].icon : (currentPrimaryTitle.match(dayRegex) ? sectionKeywords["Day \\d+"].icon : BookOpenText),
           content: [line],
           isDaySection: !!currentPrimaryTitle.match(dayRegex),
         };
       } else {
-         // If the current section's title doesn't match the ongoing primary title (e.g. for intro text before first day)
-        if (currentSection.title !== currentPrimaryTitle && currentPrimaryTitle === "Introduction" && !currentSection.isDaySection && currentSection.title !== "Overview") {
-           // This logic might be too complex, aiming to group intro text. Simpler: any text before Day 1 or Overview is one block.
-        }
         currentSection.content.push(line);
       }
     }
@@ -119,7 +115,6 @@ function parseItinerary(itineraryText: string): Section[] {
     parsedSections.push(currentSection);
   }
   
-  // Consolidate any "Introduction" sections if an "Overview" also exists and intro is just empty lines
   const introIndex = parsedSections.findIndex(s => s.title === "Introduction" && !s.isDaySection);
   if (introIndex !== -1 && parsedSections.some(s => s.title === "Overview")) {
     if (parsedSections[introIndex].content.every(c => c.trim() === '')) {
@@ -127,7 +122,6 @@ function parseItinerary(itineraryText: string): Section[] {
     }
   }
   
-  // Filter out sections that are truly empty after processing
   return parsedSections.filter(s => s.content.some(c => c.trim() !== '') || s.content.length > 0 && s.title.match(dayRegex) );
 }
 
@@ -178,8 +172,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       let lineContentForProcessing = originalLine;
       let isSubheadingProcessed = false;
 
-      // Check for subheadings within a day's content
-      if (!trimmedStartLine.match(/^(Day\s+\d+|Overview)/i)) { // Only process subheadings if not a primary Day/Overview line
+      if (!trimmedStartLine.match(/^(Day\s+\d+|Overview)/i)) { 
         for (const keyword in sectionKeywords) {
           if (sectionKeywords[keyword].isDayKeyword || keyword.toLowerCase() === "overview") continue;
           const subheadingRegex = new RegExp(`^(${keyword.replace(/\\/g, '\\\\').replace(/\s/g, '\\s')}(?:\\s*Recommendations|\\s*Suggestions)?)\\s*:?(.*)`, "i");
@@ -197,11 +190,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             );
             lineContentForProcessing = match[2]?.trim() || "";
             isSubheadingProcessed = true;
-            if (!lineContentForProcessing) break; // Break if subheading took the whole line
+            if (!lineContentForProcessing) break; 
           }
         }
       }
-      if (isSubheadingProcessed && !lineContentForProcessing) return; // Line was fully consumed by subheading
+      if (isSubheadingProcessed && !lineContentForProcessing) return; 
 
       let isList = false;
       let listItemText = "";
@@ -232,13 +225,13 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
          }
       } else {
         flushList();
-        if (lineContentForProcessing.trim()) { // Only add non-empty paragraphs
+        if (lineContentForProcessing.trim()) { 
             elements.push(
               <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
                 {processLineForBold(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
               </p>
             );
-        } else if (originalLine === '') { // Render empty lines if they were intentionally kept
+        } else if (originalLine === '') { 
            elements.push(<p key={`p-empty-${elements.length}-line-${lineIdx}-${Date.now()}`} className="my-1">&nbsp;</p>);
         }
       }
@@ -301,36 +294,84 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         const canvas = await html2canvas(itineraryContentRef.current, {
           scale: 2,
           useCORS: true,
-          backgroundColor: '#ffffff', // Ensures background is white for PDF
+          backgroundColor: '#ffffff', 
           windowHeight: itineraryContentRef.current.scrollHeight,
           windowWidth: itineraryContentRef.current.scrollWidth,
-          scrollY: 0,
+          scrollY: 0, // Capture from the top
         });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const imgProps = pdf.getImageProperties(imgData);
-        const pdfMargin = 10;
+        
+        const pdfMargin = 10; // Margin for content
         const pdfWidth = pdf.internal.pageSize.getWidth() - 2 * pdfMargin;
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        const pageContentHeight = pdf.internal.pageSize.getHeight() - 2 * pdfMargin;
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width; // Total height of the scaled image strip
 
-        let currentImagePartY = 0;
+        const pageRenderableHeight = pdf.internal.pageSize.getHeight() - 2 * pdfMargin; // Usable height per page for the image
+
+        let currentImagePartY = 0; // Tracks the Y-offset in the source image (canvas)
         let pageNumber = 0;
 
         while (currentImagePartY < imgProps.height) {
           if (pageNumber > 0) {
             pdf.addPage();
           }
-
-          const sourceHeightThatFitsOnPage = Math.min(imgProps.height - currentImagePartY, (pageContentHeight / pdfHeight) * imgProps.height);
-          const yPositionOnPdfPage = pageNumber === 0 ? pdfMargin : pdfMargin - (currentImagePartY / imgProps.height * pdfHeight);
-
-          pdf.addImage(imgData, 'PNG', pdfMargin, yPositionOnPdfPage, pdfWidth, pdfHeight);
-
-          currentImagePartY += sourceHeightThatFitsOnPage;
           pageNumber++;
 
-          if (pageNumber > 50) {
+          // ---- START PDF HEADER ----
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const headerMargin = 10; 
+
+          const logoChar = "✈"; 
+          const appNameText = "WanderAI";
+          const taglineText = "Your Personal AI Travel Planner";
+
+          const appNameFontSize = 14; 
+          const taglineFontSize = 7;
+          const logoFontSize = 14;
+
+          // App Name
+          pdf.setFont("Helvetica", "bold"); 
+          pdf.setFontSize(appNameFontSize);
+          pdf.setTextColor(135, 206, 235); // Sky Blue (Primary Color #87CEEB)
+
+          const appNameWidth = pdf.getStringUnitWidth(appNameText) * appNameFontSize / pdf.internal.scaleFactor;
+          const appNameX = pageWidth - headerMargin - appNameWidth;
+          const appNameY = headerMargin + appNameFontSize * 0.7; 
+          pdf.text(appNameText, appNameX, appNameY);
+
+          // Tagline
+          pdf.setFont("Helvetica", "normal");
+          pdf.setFontSize(taglineFontSize);
+          pdf.setTextColor(105, 105, 105); // Dim Gray for tagline (muted)
+
+          const taglineTextWidth = pdf.getStringUnitWidth(taglineText) * taglineFontSize / pdf.internal.scaleFactor;
+          const taglineX = pageWidth - headerMargin - taglineTextWidth;
+          const taglineY = appNameY + taglineFontSize + 1; 
+          pdf.text(taglineText, taglineX, taglineY);
+
+          // Logo Character
+          pdf.setFont("Helvetica", "normal"); 
+          pdf.setFontSize(logoFontSize);
+          pdf.setTextColor(135, 206, 235); // Sky Blue
+
+          const logoCharWidth = pdf.getStringUnitWidth(logoChar) * logoFontSize / pdf.internal.scaleFactor;
+          const logoX = appNameX - logoCharWidth - 2; // 2 units space
+          pdf.text(logoChar, logoX, appNameY); 
+
+          pdf.setTextColor(0, 0, 0); // Reset to black
+          // ---- END PDF HEADER ----
+          
+          // The y-position for the image strip on the PDF page.
+          // For the first page, it starts at pdfMargin. For subsequent pages, it's negative to "scroll" the image up.
+          const yPositionOnPdfPage = pdfMargin - (currentImagePartY / imgProps.height * pdfHeight);
+
+          pdf.addImage(imgData, 'PNG', pdfMargin, yPositionOnPdfPage, pdfWidth, pdfHeight);
+          
+          // Calculate how much of the source image's height corresponds to one PDF page's renderable height
+          currentImagePartY += (pageRenderableHeight / pdfHeight) * imgProps.height;
+
+          if (pageNumber > 50) { // Safety break for very long content
             toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
             break;
           }
@@ -344,7 +385,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       } finally {
         setIsExportingPdf(false);
       }
-    }, 300);
+    }, 300); // Delay to allow UI to update for full height capture if ScrollArea class changes
   };
 
 
@@ -479,3 +520,4 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
+
