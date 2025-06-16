@@ -91,8 +91,9 @@ function parseItinerary(itineraryText: string): Section[] {
     if (!matchedKeyword && currentSection) {
       currentSection.content.push(line.trim());
     } else if (!matchedKeyword && !currentSection) {
+      // If no section has started, and this line doesn't start a section, treat it as part of a general overview.
       if (sections.length === 0 || sections[sections.length-1].title !== "Overview") {
-         if (currentSection) sections.push(currentSection); 
+         if (currentSection) sections.push(currentSection); // Finalize previous if any
         currentSection = { title: "Overview", icon: BookOpenText, content: [] };
       }
       currentSection!.content.push(line.trim());
@@ -103,6 +104,7 @@ function parseItinerary(itineraryText: string): Section[] {
     sections.push(currentSection);
   }
   
+  // Fallback if no sections were parsed but there is text
   if (sections.length === 0 && itineraryText.trim() !== "") {
     sections.push({ title: "Generated Itinerary", icon: BookOpenText, content: itineraryText.split('\n').filter(l => l.trim() !== '') });
   }
@@ -160,7 +162,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const canvas = await html2canvas(itineraryContentRef.current, { 
         scale: 2, 
         useCORS: true, 
-        backgroundColor: '#ffffff', 
+        backgroundColor: '#ffffff', // Explicitly set background to white for PDF
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -177,7 +179,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
-        position = heightLeft - pdfHeight + pdfMargin; 
+        position = heightLeft - pdfHeight + pdfMargin; // Recalculate position for subsequent pages
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pdfMargin, position, pdfWidth, pdfHeight);
         heightLeft -= pageHeight;
@@ -232,11 +234,13 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
     contentLines.forEach((line) => {
       const trimmedLine = line.trim();
-      if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ')) {
-        currentListItems.push(trimmedLine.substring(2).trim());
+      // Regex to identify list markers: "-", "*", or "number." / "number)"
+      if (/^(\s*(\-|\*)\s)|(^\s*\d+(\.|\))\s)/.test(trimmedLine)) {
+        // Remove the marker for display and add to current list
+        currentListItems.push(trimmedLine.replace(/^(\s*(\-|\*)\s)|(^\s*\d+(\.|\))\s)/, '').trim());
       } else {
-        flushList(); 
-        if (trimmedLine) { 
+        flushList(); // Render any pending list items
+        if (trimmedLine) { // Only render non-empty lines as paragraphs
           elements.push(
             <p key={`p-${elements.length}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
               {trimmedLine}
@@ -246,9 +250,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       }
     });
   
-    flushList(); 
+    flushList(); // Ensure any trailing list items are rendered
   
-    return <>{elements}</>;
+    return <>{elements.length > 0 ? elements : <p className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>}</>;
   };
 
   return (
@@ -300,8 +304,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
 
-        <ScrollArea className="h-[600px] p-1 rounded-md border border-border">
-          <div ref={itineraryContentRef} className="p-4 bg-white text-black">
+        {/* This div is targeted by html2canvas for PDF export */}
+        <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border"> {/* Added explicit bg and text for PDF, plus padding */}
+          <ScrollArea className="h-[600px] p-1"> {/* ScrollArea now wraps content *inside* the PDF export div */}
             {otherSections.map((section, idx) => (
               <div key={`other-${idx}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                 <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -316,14 +321,14 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
               <Accordion type="multiple" className="w-full" defaultValue={daySections.map((_,idx) => `day-${idx}`)}>
                 {daySections.map((section, idx) => (
                   <AccordionItem value={`day-${idx}`} key={`day-${idx}`} className="mb-2 border-b-0 last:mb-0">
-                     <Card className="shadow-sm overflow-hidden">
-                        <AccordionTrigger className="p-4 hover:no-underline bg-background hover:bg-secondary/50 transition-colors rounded-t-lg">
+                     <Card className="shadow-sm overflow-hidden bg-background"> {/* Ensured card uses theme background */}
+                        <AccordionTrigger className="p-4 hover:no-underline hover:bg-secondary/50 transition-colors rounded-t-lg">
                           <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
                             <section.icon className="mr-3 h-6 w-6 text-primary/80" />
                             {section.title}
                           </h3>
                         </AccordionTrigger>
-                        <AccordionContent className="p-4 pt-2 bg-background rounded-b-lg border-t border-border">
+                        <AccordionContent className="p-4 pt-2 rounded-b-lg border-t border-border">
                           {renderContent(section.content)}
                         </AccordionContent>
                      </Card>
@@ -331,6 +336,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 ))}
               </Accordion>
             )}
+            {/* Fallback for when no sections are parsed but itinerary text exists */}
             {daySections.length === 0 && otherSections.length === 0 && itinerary && itinerary.trim() !== "" && (
                  <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                     <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -340,8 +346,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                     {renderContent(itinerary.split('\n'))}
                  </div>
             )}
-          </div>
-        </ScrollArea>
+          </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
