@@ -16,7 +16,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { RefineItineraryInputSchema, type RefineItineraryInput as RefineFormInputType } from "@/lib/schemas";
 import { refineItinerary, type RefineItineraryInput } from "@/ai/flows/refine-itinerary";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download, FileText } from "lucide-react";
+import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download, FileText, MapPin } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { format } from 'date-fns';
@@ -34,15 +34,14 @@ interface ItineraryDisplayProps {
   canRefine?: boolean;
 }
 
-interface Section {
-  title: string;
-  icon: React.ElementType;
-  content: string[];
-  isDaySection?: boolean;
-  id: string; // Unique ID for targeting with html2canvas
+interface ParsedPdfSection {
+  type: 'title' | 'heading' | 'subheading' | 'paragraph' | 'list-item' | 'separator';
+  text: string;
+  level?: number; // For headings
+  iconName?: string; // To potentially map to Unicode or skip
 }
 
-const sectionKeywords: Record<string, { title: string, icon: React.ElementType, isDayKeyword?: boolean }> = {
+const sectionKeywordsForDisplay: Record<string, { title: string, icon: React.ElementType, isDayKeyword?: boolean }> = {
   "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true },
   "Overview": { title: "Overview", icon: FileText, isDayKeyword: false },
   "Activities": { title: "Activities & Attractions", icon: MountainSnow },
@@ -57,12 +56,19 @@ const sectionKeywords: Record<string, { title: string, icon: React.ElementType, 
   "Transportation": { title: "Transportation", icon: Building2 }
 };
 
+interface HtmlSection {
+  title: string;
+  icon: React.ElementType;
+  content: string[];
+  isDaySection?: boolean;
+  id: string;
+}
 
-function parseItinerary(itineraryText: string): Section[] {
-  const parsedSections: Section[] = [];
+function parseItineraryForHtmlDisplay(itineraryText: string): HtmlSection[] {
+  const parsedSections: HtmlSection[] = [];
   const lines = itineraryText.split('\n').filter(line => line.trim() !== '' || line === ''); 
 
-  let currentSection: Omit<Section, 'id'> | null = null;
+  let currentSection: Omit<HtmlSection, 'id'> | null = null;
   let currentPrimaryTitle = "Introduction"; 
   let sectionCounter = 0;
 
@@ -75,11 +81,11 @@ function parseItinerary(itineraryText: string): Section[] {
 
     const dayMatch = trimmedLine.match(dayRegex);
     if (dayMatch) {
-      if (currentSection) parsedSections.push({...currentSection, id: `pdf-section-${sectionCounter++}`});
+      if (currentSection) parsedSections.push({...currentSection, id: `html-section-${sectionCounter++}`});
       currentPrimaryTitle = dayMatch[1].trim();
       currentSection = {
         title: currentPrimaryTitle,
-        icon: sectionKeywords["Day \\d+"].icon,
+        icon: sectionKeywordsForDisplay["Day \\d+"].icon,
         content: [],
         isDaySection: true,
       };
@@ -87,11 +93,11 @@ function parseItinerary(itineraryText: string): Section[] {
     } else {
       const overviewMatch = trimmedLine.match(overviewRegex);
       if (overviewMatch) {
-        if (currentSection) parsedSections.push({...currentSection, id: `pdf-section-${sectionCounter++}`});
+        if (currentSection) parsedSections.push({...currentSection, id: `html-section-${sectionCounter++}`});
         currentPrimaryTitle = "Overview";
         currentSection = {
-          title: sectionKeywords["Overview"].title,
-          icon: sectionKeywords["Overview"].icon,
+          title: sectionKeywordsForDisplay["Overview"].title,
+          icon: sectionKeywordsForDisplay["Overview"].icon,
           content: [],
           isDaySection: false,
         };
@@ -101,16 +107,12 @@ function parseItinerary(itineraryText: string): Section[] {
 
     if (!isNewPrimarySectionStart) {
       if (!currentSection) {
-        // Try to assign an ID to the initial non-day, non-overview block if it exists
-        const introId = `pdf-section-intro-${sectionCounter}`;
         currentSection = {
-          title: currentPrimaryTitle, // "Introduction"
+          title: currentPrimaryTitle, 
           icon: BookOpenText, 
           content: [line],
           isDaySection: false, 
         };
-         // We don't push here yet, might be more intro lines.
-         // If the next line is a Day/Overview, this currentSection will be pushed.
       } else {
         currentSection.content.push(line);
       }
@@ -118,27 +120,21 @@ function parseItinerary(itineraryText: string): Section[] {
   });
 
   if (currentSection) {
-     // If the last section was an intro, ensure its ID is unique if not already set by counter
-     const finalId = currentSection.title === "Introduction" && parsedSections.every(s => s.title !== "Introduction") 
-                     ? `pdf-section-intro-${sectionCounter++}` 
-                     : `pdf-section-${sectionCounter++}`;
+     const finalId = `html-section-${sectionCounter++}`;
      parsedSections.push({...currentSection, id: finalId});
   }
   
-  // Ensure "Introduction" section (if it exists and is the first one) has a predictable ID for export
   const introIndex = parsedSections.findIndex(s => s.title === "Introduction" && !s.isDaySection);
-  if (introIndex === 0 && parsedSections[introIndex].id.startsWith('pdf-section-') && !parsedSections[introIndex].id.includes('-intro-')) {
-    parsedSections[introIndex].id = `pdf-section-intro-${parsedSections[introIndex].id.split('-').pop()}`;
+  if (introIndex === 0 && parsedSections[introIndex].id.startsWith('html-section-') && !parsedSections[introIndex].id.includes('-intro-')) {
+    parsedSections[introIndex].id = `html-section-intro-${parsedSections[introIndex].id.split('-').pop()}`;
   } else if (introIndex === -1 && parsedSections.length > 0 && !parsedSections[0].isDaySection && parsedSections[0].title !== "Overview") {
-    // If no explicit "Introduction" title but there's content before Overview/Day 1
     if (!parsedSections[0].id.includes('-intro-')) {
-        parsedSections[0].id = `pdf-section-intro-implicit-${parsedSections[0].id.split('-').pop()}`;
+        parsedSections[0].id = `html-section-intro-implicit-${parsedSections[0].id.split('-').pop()}`;
     }
-    parsedSections[0].title = "Introduction"; // Label it as Introduction
+    parsedSections[0].title = "Introduction"; 
     parsedSections[0].icon = BookOpenText;
   }
   
-  // Remove empty introduction sections if an overview exists
   if (parsedSections.some(s => s.title === "Overview")) {
     const introIdx = parsedSections.findIndex(s => s.title === "Introduction" && s.content.every(c => c.trim() === ''));
     if (introIdx !== -1) {
@@ -171,10 +167,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       });
   };
 
-  const renderContent = (contentLines: string[]): JSX.Element[] => {
+  const renderContentForHtml = (contentLines: string[]): JSX.Element[] => {
     const elements: JSX.Element[] = [];
     let currentListItemGroup: React.ReactNode[][] = [];
-
     const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s*(.*)/;
 
     const flushList = () => {
@@ -196,15 +191,15 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       let isSubheadingProcessed = false;
 
       if (!trimmedStartLine.match(/^(Day\s+\d+|Overview)/i)) {
-        for (const keyword in sectionKeywords) {
-          if (sectionKeywords[keyword].isDayKeyword || keyword.toLowerCase() === "overview") continue;
+        for (const keyword in sectionKeywordsForDisplay) {
+          if (sectionKeywordsForDisplay[keyword].isDayKeyword || keyword.toLowerCase() === "overview") continue;
           const subheadingRegex = new RegExp(`^(${keyword.replace(/\\/g, '\\\\').replace(/\s/g, '\\s')}(?:\\s*Recommendations|\\s*Suggestions)?)\\s*:?(.*)`, "i");
           const match = trimmedStartLine.match(subheadingRegex);
 
           if (match) {
             flushList();
             const subheadingTitle = match[1].trim();
-            const { icon: IconComponent } = sectionKeywords[keyword];
+            const { icon: IconComponent } = sectionKeywordsForDisplay[keyword];
             elements.push(
               <h4 key={`subhead-${elements.length}-${lineIdx}-${Date.now()}`} className="text-lg font-headline font-semibold text-primary/80 mt-4 mb-1.5 flex items-center">
                 <IconComponent className="mr-2 h-5 w-5 text-primary/70 shrink-0" />
@@ -270,7 +265,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     return elements;
   };
 
-
   const onRefineSubmit: SubmitHandler<RefineFormInputType> = async (data) => {
     if (!itinerary) {
       toast({ title: "Error", description: "No itinerary to refine.", variant: "destructive" });
@@ -305,19 +299,20 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       return;
     }
     setIsExportingPdf(true);
+    
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const PAGE_MARGIN_MM = 10; 
+    const PAGE_MARGIN_MM = 15;
     const PDF_PAGE_WIDTH = pdf.internal.pageSize.getWidth();
     const PDF_PAGE_HEIGHT = pdf.internal.pageSize.getHeight();
     const MAX_CONTENT_WIDTH_MM = PDF_PAGE_WIDTH - 2 * PAGE_MARGIN_MM;
-
+    
     let svgDataUrl = '';
     const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#87CEEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22h20"></path><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"></path></svg>`;
     
     const tempSvgContainer = document.createElement('div');
     tempSvgContainer.id = 'temp-svg-container-for-pdf-export';
     tempSvgContainer.style.position = 'absolute';
-    tempSvgContainer.style.left = '-9999px'; // Off-screen
+    tempSvgContainer.style.left = '-9999px';
     tempSvgContainer.style.width = '64px'; 
     tempSvgContainer.style.height = '64px';
     tempSvgContainer.innerHTML = svgLogoString;
@@ -326,69 +321,69 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     try {
       const svgElementToCapture = tempSvgContainer.querySelector('svg');
       if (svgElementToCapture) {
-        const svgCanvas = await html2canvas(svgElementToCapture, { // Capture the SVG element itself
-          scale: 2, // Capture at higher resolution for better quality
-          backgroundColor: null, // Transparent background for the logo
-          width: 64, 
-          height: 64, 
-          logging: false, 
+        const svgCanvas = await html2canvas(svgElementToCapture, {
+          scale: 2, backgroundColor: null, width: 64, height: 64, logging: false,
         });
         svgDataUrl = svgCanvas.toDataURL('image/png');
-      } else {
-        throw new Error("SVG element not found in temporary container.");
-      }
+      } else { throw new Error("SVG element not found in temporary container."); }
     } catch (e) {
       console.error("Error converting SVG logo to canvas image:", e);
-      toast({ title: "PDF Logo Error", description: "Could not render the logo for the PDF. Check console.", variant: "destructive" });
+      toast({ title: "PDF Logo Error", description: "Could not render the logo. Check console.", variant: "destructive" });
     } finally {
       if (document.body.contains(tempSvgContainer)) {
-          document.body.removeChild(tempSvgContainer);
+        document.body.removeChild(tempSvgContainer);
       }
     }
 
     const LOGO_HEIGHT_MM = 8;
     const LOGO_WIDTH_MM = 8;
-    const HEADER_TEXT_SPACING_MM = 2; 
-    const HEADER_TOTAL_HEIGHT_MM = LOGO_HEIGHT_MM + 5; // Max height of logo or text + spacing
+    const HEADER_TEXT_SPACING_MM = 2;
+    const HEADER_TOTAL_HEIGHT_MM = LOGO_HEIGHT_MM + 5;
 
     const FOOTER_LINE_Y_OFFSET_FROM_BOTTOM_MARGIN = 10;
     const FOOTER_TEXT_Y_OFFSET_FROM_BOTTOM_MARGIN = 7;
-    const FOOTER_TOTAL_HEIGHT_MM = 15; 
+    const FOOTER_TOTAL_HEIGHT_MM = 15;
 
     const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_TOTAL_HEIGHT_MM;
     const MAX_CONTENT_HEIGHT_ON_PAGE_MM = PDF_PAGE_HEIGHT - CONTENT_START_Y_MM - FOOTER_TOTAL_HEIGHT_MM - PAGE_MARGIN_MM;
     
     const generationTimestamp = format(new Date(), "MMMM d, yyyy 'at' h:mm a");
+    let currentPageNum = 0;
+    let currentYOnPage = CONTENT_START_Y_MM;
 
-    const drawPageHeaderAndFooter = (currentPageNum: number) => {
+    const addNewPage = () => {
+      if (currentPageNum > 0) pdf.addPage();
+      currentPageNum++;
+      currentYOnPage = CONTENT_START_Y_MM;
+      drawPageHeaderAndFooter();
+    };
+
+    const drawPageHeaderAndFooter = () => {
       // Header
       const logoX = PAGE_MARGIN_MM;
       const logoY = PAGE_MARGIN_MM;
       if (svgDataUrl) {
-        try { 
-          pdf.addImage(svgDataUrl, 'PNG', logoX, logoY, LOGO_WIDTH_MM, LOGO_HEIGHT_MM); 
-        } catch (imgError) { 
-          console.error("Error adding SVG logo image to PDF page:", imgError); 
+        try { pdf.addImage(svgDataUrl, 'PNG', logoX, logoY, LOGO_WIDTH_MM, LOGO_HEIGHT_MM); }
+        catch (imgError) { 
+          console.error("Error adding SVG logo image to PDF page:", imgError);
           pdf.setFont("Helvetica", "normal").setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
         }
-      } else {
-        pdf.setFont("Helvetica", "normal").setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
-      }
+      } else { pdf.setFont("Helvetica", "normal").setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2); }
       
       const textStartX = logoX + LOGO_WIDTH_MM + HEADER_TEXT_SPACING_MM;
-      pdf.setFont("Helvetica", "bold"); pdf.setFontSize(12); pdf.setTextColor(135, 206, 235); // Primary color #87CEEB
+      pdf.setFont("Helvetica", "bold"); pdf.setFontSize(12); pdf.setTextColor(135, 206, 235);
       pdf.text("WanderAI", textStartX, logoY + (LOGO_HEIGHT_MM / 2) - 1); 
       
-      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(105, 105, 105); // Muted gray
+      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(105, 105, 105);
       pdf.text("Your Personal AI Travel Planner", textStartX, logoY + (LOGO_HEIGHT_MM / 2) + 3); 
-      pdf.setTextColor(0,0,0); // Reset to black for other text
+      pdf.setTextColor(0,0,0);
 
       // Footer
       const footerLineY = PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_LINE_Y_OFFSET_FROM_BOTTOM_MARGIN;
-      pdf.setDrawColor(200, 200, 200); // Light gray line
+      pdf.setDrawColor(200, 200, 200);
       pdf.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH - PAGE_MARGIN_MM, footerLineY);
 
-      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(128, 128, 128); // Gray text
+      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(128, 128, 128);
       
       const pageNumText = `Page ${currentPageNum}`;
       const pageNumTextWidth = pdf.getStringUnitWidth(pageNumText) * pdf.getFontSize() / pdf.internal.scaleFactor;
@@ -399,233 +394,153 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       
       const dateTextWidth = pdf.getStringUnitWidth(generationTimestamp) * pdf.getFontSize() / pdf.internal.scaleFactor;
       pdf.text(generationTimestamp, PDF_PAGE_WIDTH - PAGE_MARGIN_MM - dateTextWidth, PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TEXT_Y_OFFSET_FROM_BOTTOM_MARGIN);
-      pdf.setTextColor(0,0,0); // Reset text color
+      pdf.setTextColor(0,0,0);
     };
 
-    let currentPageNum = 0;
-    let currentYOnPage = CONTENT_START_Y_MM; 
-    const MAX_PDF_PAGES_PER_SECTION = 20; // Safety break
+    const LINE_HEIGHT_MM_PARA = 5; // Approximate line height for paragraphs
+    const LINE_HEIGHT_MM_HEADING = 7;
+    const LINE_HEIGHT_MM_SUBHEADING = 6;
+    const LIST_INDENT_MM = 5;
+    const PARAGRAPH_SPACING_MM = 2;
+    const SECTION_SPACING_MM = 8;
 
-    const addContentToPage = async (elementId: string, isFirstSectionOverall: boolean, forceNewPageForThisSection: boolean) => {
-      const element = document.getElementById(elementId);
-      if (!element) {
-        console.warn(`Element with ID ${elementId} not found for PDF export.`);
-        return false; 
-      }
+
+    const addWrappedText = (text: string, x: number, y: number, options: {
+        font?: string, style?: string, size?: number, color?: number[] | string, maxWidth?: number, isListItem?: boolean
+      } = {}): number => {
       
-      const accordionContentParent = element.closest('.radix-accordion-content');
-      const scrollAreaViewPort = element.closest('.radix-scroll-area-viewport');
-      let originalAccordionStyle = '';
-      let originalElementDisplay = element.style.display;
-      let originalScrollAreaViewportStyle = '';
-      const tempPadding = '20px'; // Added padding to prevent cutting off bottom
-      const originalElementPaddingBottom = element.style.paddingBottom;
-
-
-      if (accordionContentParent instanceof HTMLElement) {
-          originalAccordionStyle = accordionContentParent.style.cssText;
-          accordionContentParent.style.setProperty('display', 'block', 'important');
-          accordionContentParent.style.setProperty('height', 'auto', 'important');
-          accordionContentParent.style.setProperty('visibility', 'visible', 'important');
-          accordionContentParent.style.setProperty('overflow', 'visible', 'important');
-      }
-      if (element.classList.contains('radix-accordion-trigger') && element.offsetParent === null) {
-        element.style.display = 'flex'; // Ensure trigger is displayable for capture if it's the target
-      }
-      if (scrollAreaViewPort instanceof HTMLElement) { // For the main scroll area
-        originalScrollAreaViewportStyle = scrollAreaViewPort.style.cssText;
-        scrollAreaViewPort.style.height = 'auto';
-        scrollAreaViewPort.style.overflowY = 'visible';
-      }
+      if (typeof text !== 'string') text = String(text); // Ensure text is a string
       
-      element.style.paddingBottom = tempPadding; // Apply temporary padding
-
-      const canvas = await html2canvas(element, {
-        scale: 2, 
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        width: element.offsetWidth, // Use offsetWidth
-        height: element.scrollHeight, // scrollHeight will include padding
-        windowWidth: element.scrollWidth, // Consider full scrollable width of element
-        windowHeight: element.scrollHeight, // Consider full scrollable height of element
-        logging: false,
-      });
-
-      element.style.paddingBottom = originalElementPaddingBottom; // Restore padding
-      if (accordionContentParent instanceof HTMLElement) {
-        accordionContentParent.style.cssText = originalAccordionStyle;
-      }
-      element.style.display = originalElementDisplay;
-      if (scrollAreaViewPort instanceof HTMLElement) {
-        scrollAreaViewPort.style.cssText = originalScrollAreaViewportStyle;
-      }
-
-
-      const imgData = canvas.toDataURL('image/png');
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeightRatio = imgProps.height / imgProps.width;
-      
-      // This is the total height the *entire captured image section* would take up in the PDF if drawn at full width
-      const scaledImgHeightFullMm = MAX_CONTENT_WIDTH_MM * imgHeightRatio;
-      if (scaledImgHeightFullMm <= 0) return true; // Nothing to draw for this section
-
-      let imgPartStartYpx = 0; // Current Y position in the source canvas image (in pixels)
-
-      if (isFirstSectionOverall) {
-        currentPageNum = 1;
-        drawPageHeaderAndFooter(currentPageNum);
-        currentYOnPage = CONTENT_START_Y_MM;
-      } else if (forceNewPageForThisSection) {
-        pdf.addPage();
-        currentPageNum++;
-        drawPageHeaderAndFooter(currentPageNum);
-        currentYOnPage = CONTENT_START_Y_MM;
+      pdf.setFont(options.font || "Helvetica", options.style || "normal");
+      pdf.setFontSize(options.size || 10);
+      if (options.color) {
+        if (Array.isArray(options.color)) pdf.setTextColor(options.color[0], options.color[1], options.color[2]);
+        else pdf.setTextColor(options.color);
       } else {
-        // Check if there's enough space on the current page for a meaningful start
-        const estimatedSpaceNeededForFirstChunk = Math.min(scaledImgHeightFullMm, MAX_CONTENT_HEIGHT_ON_PAGE_MM / 3); // Heuristic: need at least 1/3 page
-        if (currentYOnPage + estimatedSpaceNeededForFirstChunk > (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM) ) {
-            pdf.addPage();
-            currentPageNum++;
-            drawPageHeaderAndFooter(currentPageNum);
-            currentYOnPage = CONTENT_START_Y_MM;
-        } else if (currentYOnPage > CONTENT_START_Y_MM) { 
-            currentYOnPage += 3; // Small gap before next section on same page
-        }
+        pdf.setTextColor(0,0,0);
       }
 
-      let pagesRenderedForThisSection = 0;
+      const maxWidth = options.maxWidth || MAX_CONTENT_WIDTH_MM;
+      let currentX = x;
+      if (options.isListItem) {
+        pdf.text("•", currentX, y);
+        currentX += LIST_INDENT_MM;
+      }
+      
+      const lines = pdf.splitTextToSize(text, options.isListItem ? maxWidth - LIST_INDENT_MM : maxWidth);
+      let newY = y;
 
-      while (imgPartStartYpx < imgProps.height) {
-        if (pagesRenderedForThisSection >= MAX_PDF_PAGES_PER_SECTION) {
-            console.warn(`PDF export truncated for section ${elementId} due to excessive pages.`);
-            break;
-        }
-        
-        let remainingPageHeightMm = (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM) - currentYOnPage;
-        
-        if (remainingPageHeightMm <= 1) { // If practically no space left
-            pdf.addPage();
-            currentPageNum++;
-            drawPageHeaderAndFooter(currentPageNum);
-            currentYOnPage = CONTENT_START_Y_MM;
-            remainingPageHeightMm = MAX_CONTENT_HEIGHT_ON_PAGE_MM; 
-            pagesRenderedForThisSection++;
-        }
-        
-        // This is the height of the *rest* of the image section, scaled to PDF width
-        const remainingImageSectionHeightMm = ((imgProps.height - imgPartStartYpx) / imgProps.width) * MAX_CONTENT_WIDTH_MM;
-
-        // How much of the image can we draw on the current PDF page?
-        // It's the minimum of the space left on the page, and the actual remaining height of the image section.
-        const heightOfImgPartToDrawMm = Math.min(
-            remainingPageHeightMm,
-            remainingImageSectionHeightMm
-        );
-
-        if (heightOfImgPartToDrawMm <= 0) { // No drawable content or no space
-            break; 
-        }
-        // Convert the mm height to draw back to px height for the source canvas crop
-        const heightOfImgPartToDrawPx = (heightOfImgPartToDrawMm / MAX_CONTENT_WIDTH_MM) * imgProps.width;
-
-        pdf.addImage(
-          imgData, 'PNG',
-          PAGE_MARGIN_MM, currentYOnPage, // X, Y on PDF page
-          MAX_CONTENT_WIDTH_MM, heightOfImgPartToDrawMm, // Width, Height on PDF page
-          undefined, 'NONE', 0, // alias, compression, rotation
-          // Source image cropping (all are in pixels of the source canvas)
-          0, // sx (source X)
-          imgPartStartYpx, // sy (source Y)
-          imgProps.width, // sWidth (source width)
-          heightOfImgPartToDrawPx // sHeight (source height)
-        );
-        
-        imgPartStartYpx += heightOfImgPartToDrawPx;
-        currentYOnPage += heightOfImgPartToDrawMm;
-
-        // If there's more of this section's image to draw, and we're at the bottom of the current PDF page
-        if (imgPartStartYpx < imgProps.height) { 
-          if (currentYOnPage >= (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM -1) ) { // -1 for a small buffer
-             pdf.addPage();
-             currentPageNum++;
-             drawPageHeaderAndFooter(currentPageNum);
-             currentYOnPage = CONTENT_START_Y_MM;
-             pagesRenderedForThisSection++;
+      lines.forEach((line: string) => {
+        if (newY > MAX_CONTENT_HEIGHT_ON_PAGE_MM + CONTENT_START_Y_MM - (options.size || 10) / 2.83 * 0.8) { // Check if next line fits
+          addNewPage();
+          newY = currentYOnPage; // currentYOnPage is reset by addNewPage
+          if (options.isListItem) { // Redraw bullet on new page if list item continues
+             pdf.setFont(options.font || "Helvetica", options.style || "normal"); // Reset font for bullet
+             pdf.setFontSize(options.size || 10);
+             if (options.color) { /* set color */ } else {pdf.setTextColor(0,0,0); }
+             pdf.text("•", x, newY);
           }
         }
-      }
-      return true; // Successfully processed this section
+        pdf.text(line, options.isListItem ? currentX : x, newY);
+        newY += (options.size || 10) / 2.83 * 1.2; // mm approx line height (pt to mm * line spacing factor)
+      });
+      currentYOnPage = newY;
+      return newY; // Return the Y position after the last line of this text block
+    };
+
+
+    const parseAndDrawItinerary = (itineraryText: string) => {
+        addNewPage(); // Start with a fresh page
+        let isFirstMajorSection = true;
+
+        const lines = itineraryText.split('\n');
+        let currentSectionTitle = "";
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) { // Handle blank lines as paragraph breaks
+                currentYOnPage += PARAGRAPH_SPACING_MM;
+                continue;
+            }
+
+            const dayMatch = trimmedLine.match(/^(Day\s+\d+.*?):?$/i);
+            const overviewMatch = trimmedLine.match(/^(Overview):?$/i);
+            
+            let isMajorHeading = false;
+            if (dayMatch) {
+                currentSectionTitle = dayMatch[1];
+                isMajorHeading = true;
+            } else if (overviewMatch) {
+                currentSectionTitle = overviewMatch[1];
+                isMajorHeading = true;
+            }
+            
+            if (isMajorHeading) {
+                if (!isFirstMajorSection || (currentSectionTitle.toLowerCase() === "overview" && currentPageNum > 1) ) {
+                    addNewPage();
+                } else if (!isFirstMajorSection) {
+                     currentYOnPage += SECTION_SPACING_MM / 2; // Smaller space if not a new page
+                }
+                addWrappedText(currentSectionTitle, PAGE_MARGIN_MM, currentYOnPage, {
+                    font: "Helvetica", style: "bold", size: 16, color: [65, 105, 225], /* Royal Blue */
+                    maxWidth: MAX_CONTENT_WIDTH_MM
+                });
+                currentYOnPage += PARAGRAPH_SPACING_MM;
+                isFirstMajorSection = false;
+                continue;
+            }
+
+            let isSubHeading = false;
+            for (const keyword in sectionKeywordsForDisplay) {
+                if (sectionKeywordsForDisplay[keyword].isDayKeyword || keyword.toLowerCase() === "overview") continue;
+                const subheadingRegex = new RegExp(`^(${keyword.replace(/\\/g, '\\\\')}(?:\\s*Recommendations|\\s*Suggestions)?)\\s*:?(.*)`, "i");
+                const subMatch = trimmedLine.match(subheadingRegex);
+                if (subMatch) {
+                    currentYOnPage += PARAGRAPH_SPACING_MM;
+                    addWrappedText(subMatch[1].trim(), PAGE_MARGIN_MM, currentYOnPage, {
+                         font: "Helvetica", style: "bold", size: 12, color: [70, 130, 180], /* Steel Blue */
+                         maxWidth: MAX_CONTENT_WIDTH_MM
+                    });
+                    currentYOnPage += PARAGRAPH_SPACING_MM / 2;
+                    if (subMatch[2] && subMatch[2].trim()) { // Content on the same line as subheading
+                        addWrappedText(subMatch[2].trim(), PAGE_MARGIN_MM, currentYOnPage, { size: 10, maxWidth: MAX_CONTENT_WIDTH_MM });
+                    }
+                    isSubHeading = true;
+                    break;
+                }
+            }
+            if (isSubHeading) continue;
+
+            // Handle list items and paragraphs
+            const listItemMatch = trimmedLine.match(/^\s*[-*\u2022•]\s*(.*)/);
+            if (listItemMatch) {
+                addWrappedText(listItemMatch[1], PAGE_MARGIN_MM, currentYOnPage, { size: 10, maxWidth: MAX_CONTENT_WIDTH_MM, isListItem: true });
+            } else {
+                // Paragraph
+                addWrappedText(trimmedLine.replace(/\*\*(.*?)\*\*/g, '$1'), PAGE_MARGIN_MM, currentYOnPage, { // Basic bold removal for PDF
+                    size: 10, 
+                    maxWidth: MAX_CONTENT_WIDTH_MM 
+                });
+            }
+             currentYOnPage += PARAGRAPH_SPACING_MM / 2; // Small spacing after each line/item
+        }
     };
 
     try {
-      const parsedSections = parseItinerary(itinerary || "");
-      
-      // Reorder sections: Intro, then Overview, then Day sections, then others.
-      const introSection = parsedSections.find(s => s.title.toLowerCase() === "introduction" && !s.isDaySection);
-      const overviewSection = parsedSections.find(s => s.title.toLowerCase() === "overview" && !s.isDaySection);
-      const daySections = parsedSections.filter(s => s.isDaySection).sort((a, b) => {
-          const dayA = parseInt(a.title.match(/Day (\d+)/i)?.[1] || "0");
-          const dayB = parseInt(b.title.match(/Day (\d+)/i)?.[1] || "0");
-          return dayA - dayB;
-      });
-      const otherSections = parsedSections.filter(s => 
-          s.id !== introSection?.id && s.id !== overviewSection?.id && !s.isDaySection
-      );
-
-      const sectionsToExport: Section[] = [];
-      if (introSection) sectionsToExport.push(introSection);
-      if (overviewSection) sectionsToExport.push(overviewSection);
-      sectionsToExport.push(...daySections);
-      sectionsToExport.push(...otherSections);
-
-
-      if (sectionsToExport.length === 0 && itinerary && itinerary.trim() !== "") {
-         // Fallback for plain text itinerary if parsing somehow fails to produce sections
-         sectionsToExport.push({
-            id: "pdf-section-fallback", title: "Generated Itinerary", icon: BookOpenText, 
-            content: itinerary.split('\n'), isDaySection: false 
-         });
-      }
-
-      let isFirstContentBlockOverall = true;
-
-      for (const section of sectionsToExport) {
-        let forceNewPageForThisSection = false;
-        const isIntro = section.title.toLowerCase() === "introduction";
-        const isOverview = section.title.toLowerCase() === "overview";
-        const isDay = section.isDaySection;
-        
-        if (isFirstContentBlockOverall) {
-          forceNewPageForThisSection = false; // First block never forces a new page beyond the initial one
-        } else if (isOverview || isDay) {
-          // Overview, Day 1, Day 2... all start on new pages if they are not the very first content block.
-          forceNewPageForThisSection = true;
+        parseAndDrawItinerary(itinerary);
+        if (currentPageNum === 0) { // Fallback if nothing was drawn
+            addNewPage();
+            addWrappedText("No content to export.", PAGE_MARGIN_MM, currentYOnPage);
         }
-        // Other non-day, non-overview, non-intro sections will flow normally after the previous section.
-
-        const success = await addContentToPage(section.id, isFirstContentBlockOverall, forceNewPageForThisSection);
-        if (success) {
-            isFirstContentBlockOverall = false;
-        }
-      }
-      
-      if (currentPageNum === 0) { // If no content was actually added (e.g., all sections were empty or had errors)
-        currentPageNum = 1;
-        drawPageHeaderAndFooter(currentPageNum);
-        pdf.text("No content to export.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 10);
-      }
-
-      pdf.save('wanderai-itinerary.pdf');
-      toast({ title: "Export Successful", description: `Your itinerary (${currentPageNum} page(s)) has been downloaded.`, className: "bg-primary text-primary-foreground" });
-
+        pdf.save('wanderai-itinerary.pdf');
+        toast({ title: "Export Successful", description: `Your itinerary (${currentPageNum} page(s)) has been downloaded.`, className: "bg-primary text-primary-foreground" });
     } catch (err) {
-      console.error("Error during PDF export:", err);
-      toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary. Check console.", variant: "destructive" });
+        console.error("Error during PDF export:", err);
+        toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary. Check console.", variant: "destructive" });
     } finally {
-      setIsExportingPdf(false);
+        setIsExportingPdf(false);
     }
   };
-
 
   if (isLoading) {
     return (
@@ -646,23 +561,23 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
 
   if (!itinerary) return null;
 
-  const parsedSections = parseItinerary(itinerary);
-  const introSection = parsedSections.find(s => s.title.toLowerCase() === "introduction" && !s.isDaySection);
-  const overviewSection = parsedSections.find(s => s.title.toLowerCase() === "overview" && !s.isDaySection);
-  const daySections = parsedSections.filter(s => s.isDaySection).sort((a,b) => {
+  const htmlSectionsToDisplay = parseItineraryForHtmlDisplay(itinerary);
+  const introSection = htmlSectionsToDisplay.find(s => s.title.toLowerCase() === "introduction" && !s.isDaySection);
+  const overviewSection = htmlSectionsToDisplay.find(s => s.title.toLowerCase() === "overview" && !s.isDaySection);
+  const daySections = htmlSectionsToDisplay.filter(s => s.isDaySection).sort((a,b) => {
       const dayA = parseInt(a.title.match(/Day (\d+)/i)?.[1] || "0");
       const dayB = parseInt(b.title.match(/Day (\d+)/i)?.[1] || "0");
       return dayA - dayB;
   });
-  const otherNonDaySections = parsedSections.filter(s => 
+  const otherNonDaySections = htmlSectionsToDisplay.filter(s => 
       s.id !== introSection?.id && s.id !== overviewSection?.id && !s.isDaySection
   );
   
-  const allSectionsInOrder: Section[] = [];
-  if (introSection) allSectionsInOrder.push(introSection);
-  if (overviewSection) allSectionsInOrder.push(overviewSection);
-  allSectionsInOrder.push(...daySections);
-  allSectionsInOrder.push(...otherNonDaySections);
+  const allSectionsInOrderForHtml: HtmlSection[] = [];
+  if (introSection) allSectionsInOrderForHtml.push(introSection);
+  if (overviewSection) allSectionsInOrderForHtml.push(overviewSection);
+  allSectionsInOrderForHtml.push(...daySections);
+  allSectionsInOrderForHtml.push(...otherNonDaySections);
 
 
   return (
@@ -717,9 +632,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         )}
         
         <div className="bg-background text-foreground p-1 rounded-md border border-input">
-          <ScrollArea className="h-[600px] overflow-y-auto p-1" id="itinerary-scroll-area-for-pdf">
-            <div className="space-y-1" id="itinerary-content-for-pdf">
-              {allSectionsInOrder.map((section) => {
+          <ScrollArea className="h-[600px] overflow-y-auto p-1">
+            <div className="space-y-1">
+              {allSectionsInOrderForHtml.map((section) => {
                 const sectionHtmlId = section.id; 
                 if (section.isDaySection) {
                    return (
@@ -733,32 +648,31 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                                     </h3>
                                 </AccordionTrigger>
                                 <AccordionContent className="p-3 pt-1 rounded-b-lg border-t border-border/50">
-                                    {renderContent(section.content)}
+                                    {renderContentForHtml(section.content)}
                                 </AccordionContent>
                             </Card>
                         </AccordionItem>
                     </Accordion>
                    );
-                } else { // For Introduction, Overview, and any other non-day sections
+                } else { 
                     return (
                         <Card id={sectionHtmlId} key={sectionHtmlId} className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
                             <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
                                 <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
                                 {section.title}
                             </h3>
-                            {renderContent(section.content)}
+                            {renderContentForHtml(section.content)}
                         </Card>
                     );
                 }
               })}
-              {allSectionsInOrder.length === 0 && itinerary && itinerary.trim() !== "" && (
-                  // Fallback rendering if parsing into sections somehow fails but itinerary text exists
-                  <Card id="pdf-section-fallback" className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
+              {allSectionsInOrderForHtml.length === 0 && itinerary && itinerary.trim() !== "" && (
+                  <Card id="html-section-fallback" className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
                       <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
                           <BookOpenText className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
                           Generated Itinerary
                       </h3>
-                      {renderContent(itinerary.split('\n'))}
+                      {renderContentForHtml(itinerary.split('\n'))}
                   </Card>
               )}
             </div> 
@@ -768,4 +682,3 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
-
