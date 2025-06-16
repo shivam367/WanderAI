@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { PlaneTakeoff, UserCircle, LogOut, LayoutDashboard, UserCog } from "lucide-react";
+import { PlaneTakeoff, UserCircle, LogOut, LayoutDashboard, UserCog, History } from "lucide-react"; // Added History
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -19,20 +19,25 @@ export function Header() {
             <p className="text-xs text-muted-foreground font-body">Your Personal AI Travel Planner</p>
           </div>
         </Link>
-        <nav className="flex items-center space-x-2 md:space-x-4">
+        <nav className="flex items-center space-x-1 md:space-x-2">
           {currentUser ? (
             <>
               <Button variant="ghost" asChild>
-                <Link href="/dashboard" className="font-body flex items-center">
+                <Link href="/dashboard" className="font-body flex items-center text-sm md:text-base">
                   <LayoutDashboard className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Dashboard</span>
                 </Link>
               </Button>
               <Button variant="ghost" asChild>
-                <Link href="/profile" className="font-body flex items-center">
+                <Link href="/history" className="font-body flex items-center text-sm md:text-base">
+                  <History className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">History</span>
+                </Link>
+              </Button>
+              <Button variant="ghost" asChild>
+                <Link href="/profile" className="font-body flex items-center text-sm md:text-base">
                   <UserCog className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Profile</span>
                 </Link>
               </Button>
-              <Button variant="outline" onClick={logout} className="border-destructive text-destructive hover:bg-destructive/10 font-body flex items-center">
+              <Button variant="outline" onClick={logout} className="border-destructive text-destructive hover:bg-destructive/10 font-body flex items-center text-sm md:text-base">
                 <LogOut className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Logout</span>
               </Button>
             </>

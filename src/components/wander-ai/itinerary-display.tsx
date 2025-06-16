@@ -16,7 +16,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { RefineItineraryInputSchema, type RefineItineraryInput as RefineFormInputType } from "@/lib/schemas";
 import { refineItinerary, type RefineItineraryInput } from "@/ai/flows/refine-itinerary";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download } from "lucide-react";
+import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download, FileText } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -30,6 +30,7 @@ interface ItineraryDisplayProps {
   setIsRefining: (refining: boolean) => void;
   onItineraryRefined: (refinedItinerary: string) => void;
   error: string | null;
+  canRefine?: boolean; // New prop to control refine button visibility
 }
 
 interface Section {
@@ -40,8 +41,8 @@ interface Section {
 }
 
 const sectionKeywords: Record<string, { title: string, icon: React.ElementType, isDayKeyword?: boolean }> = {
-  "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true }, 
-  "Overview": { title: "Overview", icon: BookOpenText, isDayKeyword: false }, 
+  "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true },
+  "Overview": { title: "Overview", icon: FileText, isDayKeyword: false },
   "Activities": { title: "Activities & Attractions", icon: MountainSnow },
   "Attractions": { title: "Activities & Attractions", icon: MountainSnow },
   "Food Recommendations": { title: "Food Recommendations", icon: Utensils },
@@ -57,12 +58,13 @@ const sectionKeywords: Record<string, { title: string, icon: React.ElementType, 
 
 function parseItinerary(itineraryText: string): Section[] {
   const parsedSections: Section[] = [];
-  const lines = itineraryText.split('\n').filter(line => line.trim() !== '');
+  const lines = itineraryText.split('\n').filter(line => line.trim() !== '' || line === ''); // Keep empty lines for pre-wrap effect
 
   let currentSection: Section | null = null;
+  let currentPrimaryTitle = "Introduction"; // Default for content before first Day/Overview
 
-  const dayRegex = new RegExp(`^(Day\\s+\\d+.*?)[:]?$`, "i"); 
-  const overviewRegex = new RegExp(`^(Overview)[:]?$`, "i");  
+  const dayRegex = new RegExp(`^(Day\\s+\\d+.*?)[:]?$`, "i");
+  const overviewRegex = new RegExp(`^(Overview)[:]?$`, "i");
 
   lines.forEach(line => {
     const trimmedLine = line.trim();
@@ -71,8 +73,9 @@ function parseItinerary(itineraryText: string): Section[] {
     const dayMatch = trimmedLine.match(dayRegex);
     if (dayMatch) {
       if (currentSection) parsedSections.push(currentSection);
+      currentPrimaryTitle = dayMatch[1].trim();
       currentSection = {
-        title: dayMatch[1].trim(), 
+        title: currentPrimaryTitle,
         icon: sectionKeywords["Day \\d+"].icon,
         content: [],
         isDaySection: true,
@@ -82,8 +85,9 @@ function parseItinerary(itineraryText: string): Section[] {
       const overviewMatch = trimmedLine.match(overviewRegex);
       if (overviewMatch) {
         if (currentSection) parsedSections.push(currentSection);
+        currentPrimaryTitle = "Overview";
         currentSection = {
-          title: "Overview",
+          title: currentPrimaryTitle,
           icon: sectionKeywords["Overview"].icon,
           content: [],
           isDaySection: false,
@@ -93,15 +97,20 @@ function parseItinerary(itineraryText: string): Section[] {
     }
 
     if (!isNewPrimarySectionStart) {
-      if (currentSection) {
-        currentSection.content.push(line); // Store raw line to preserve original spacing for pre-wrap
+      if (!currentSection) {
+        // Initialize with the default/current primary title if no section started yet
+        currentSection = {
+          title: currentPrimaryTitle, // Could be "Introduction" or a carried-over Day/Overview title
+          icon: currentPrimaryTitle === "Overview" ? sectionKeywords["Overview"].icon : (currentPrimaryTitle.match(dayRegex) ? sectionKeywords["Day \\d+"].icon : BookOpenText),
+          content: [line],
+          isDaySection: !!currentPrimaryTitle.match(dayRegex),
+        };
       } else {
-        if (parsedSections.length === 0 || parsedSections[parsedSections.length - 1].title !== "Introduction") {
-          currentSection = { title: "Introduction", icon: BookOpenText, content: [line], isDaySection: false };
-        } else {
-          currentSection = parsedSections[parsedSections.length - 1];
-          currentSection.content.push(line);
+         // If the current section's title doesn't match the ongoing primary title (e.g. for intro text before first day)
+        if (currentSection.title !== currentPrimaryTitle && currentPrimaryTitle === "Introduction" && !currentSection.isDaySection && currentSection.title !== "Overview") {
+           // This logic might be too complex, aiming to group intro text. Simpler: any text before Day 1 or Overview is one block.
         }
+        currentSection.content.push(line);
       }
     }
   });
@@ -110,18 +119,20 @@ function parseItinerary(itineraryText: string): Section[] {
     parsedSections.push(currentSection);
   }
   
-  const introIndex = parsedSections.findIndex(s => s.title === "Introduction");
+  // Consolidate any "Introduction" sections if an "Overview" also exists and intro is just empty lines
+  const introIndex = parsedSections.findIndex(s => s.title === "Introduction" && !s.isDaySection);
   if (introIndex !== -1 && parsedSections.some(s => s.title === "Overview")) {
     if (parsedSections[introIndex].content.every(c => c.trim() === '')) {
       parsedSections.splice(introIndex, 1);
     }
   }
   
-  return parsedSections.filter(s => s.isDaySection || s.title === "Overview" || s.content.some(c => c.trim() !== ''));
+  // Filter out sections that are truly empty after processing
+  return parsedSections.filter(s => s.content.some(c => c.trim() !== '') || s.content.length > 0 && s.title.match(dayRegex) );
 }
 
 
-export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefining, onItineraryRefined, error }: ItineraryDisplayProps) {
+export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefining, onItineraryRefined, error, canRefine = true }: ItineraryDisplayProps) {
   const { toast } = useToast();
   const [showRefineForm, setShowRefineForm] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -133,8 +144,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   });
 
   const processLineForBold = (line: string, keyPrefix: string): React.ReactNode[] => {
-    const parts = line.split(/(\*\*.*?\*\*)/g); 
-    return parts.filter(part => part.length > 0) 
+    const parts = line.split(/(\*\*.*?\*\*)/g);
+    return parts.filter(part => part.length > 0)
       .map((part, idx) => {
         if (part.startsWith('**') && part.endsWith('**')) {
           return <strong key={`${keyPrefix}-bold-${idx}-${Date.now()}`}>{part.slice(2, -2)}</strong>;
@@ -142,13 +153,13 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         return part;
       });
   };
-  
+
   const renderContent = (contentLines: string[]): JSX.Element[] => {
     const elements: JSX.Element[] = [];
-    let currentListItemGroup: React.ReactNode[][] = []; // Stores arrays of nodes for each li
-  
+    let currentListItemGroup: React.ReactNode[][] = [];
+
     const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s*(.*)/;
-  
+
     const flushList = () => {
       if (currentListItemGroup.length > 0) {
         elements.push(
@@ -161,45 +172,43 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         currentListItemGroup = [];
       }
     };
-  
+
     contentLines.forEach((originalLine, lineIdx) => {
-      let lineContentForProcessing = originalLine; // Keep leading/trailing spaces for pre-wrap if it's a paragraph
-      if (originalLine.trim() === "") { // Handle empty lines or lines with only spaces if they are meant to be paragraph breaks
-        flushList();
-        elements.push(<p key={`p-empty-${elements.length}-line-${lineIdx}-${Date.now()}`} className="my-1">&nbsp;</p>); // Render an empty paragraph for space
-        return;
-      }
-      
-      lineContentForProcessing = originalLine.trimStart(); // Trim start for subheading/list detection
+      const trimmedStartLine = originalLine.trimStart();
+      let lineContentForProcessing = originalLine;
       let isSubheadingProcessed = false;
 
-      for (const keyword in sectionKeywords) {
-        if (sectionKeywords[keyword].isDayKeyword || keyword.toLowerCase() === "overview") continue;
-        const subheadingRegex = new RegExp(`^(${keyword.replace(/\s/g, '\\s')}(?:\\s*Recommendations)?)\\s*:?(.*)`, "i");
-        const match = lineContentForProcessing.match(subheadingRegex);
-  
-        if (match) {
-          flushList();
-          const subheadingTitle = match[1].trim();
-          const { icon: IconComponent } = sectionKeywords[keyword];
-          elements.push(
-            <h4 key={`subhead-${elements.length}-${lineIdx}-${Date.now()}`} className="text-lg font-headline font-semibold text-primary/80 mt-4 mb-1.5 flex items-center">
-              <IconComponent className="mr-2 h-5 w-5 text-primary/70 shrink-0" />
-              {subheadingTitle}
-            </h4>
-          );
-          lineContentForProcessing = match[2]?.trim() || ""; 
-          isSubheadingProcessed = true;
-          if (!lineContentForProcessing) break;
+      // Check for subheadings within a day's content
+      if (!trimmedStartLine.match(/^(Day\s+\d+|Overview)/i)) { // Only process subheadings if not a primary Day/Overview line
+        for (const keyword in sectionKeywords) {
+          if (sectionKeywords[keyword].isDayKeyword || keyword.toLowerCase() === "overview") continue;
+          const subheadingRegex = new RegExp(`^(${keyword.replace(/\\/g, '\\\\').replace(/\s/g, '\\s')}(?:\\s*Recommendations|\\s*Suggestions)?)\\s*:?(.*)`, "i");
+          const match = trimmedStartLine.match(subheadingRegex);
+
+          if (match) {
+            flushList();
+            const subheadingTitle = match[1].trim();
+            const { icon: IconComponent } = sectionKeywords[keyword];
+            elements.push(
+              <h4 key={`subhead-${elements.length}-${lineIdx}-${Date.now()}`} className="text-lg font-headline font-semibold text-primary/80 mt-4 mb-1.5 flex items-center">
+                <IconComponent className="mr-2 h-5 w-5 text-primary/70 shrink-0" />
+                {subheadingTitle}
+              </h4>
+            );
+            lineContentForProcessing = match[2]?.trim() || "";
+            isSubheadingProcessed = true;
+            if (!lineContentForProcessing) break; // Break if subheading took the whole line
+          }
         }
       }
-      if (isSubheadingProcessed && !lineContentForProcessing) return;
-      
+      if (isSubheadingProcessed && !lineContentForProcessing) return; // Line was fully consumed by subheading
+
       let isList = false;
       let listItemText = "";
       let makeListItemContentBold = false;
-  
-      const directListMatch = lineContentForProcessing.match(listRegex);
+
+      const directListMatch = lineContentForProcessing.match(listRegex) || (isSubheadingProcessed ? "" : trimmedStartLine.match(listRegex));
+
       if (directListMatch) {
         isList = true;
         listItemText = directListMatch[1].trim();
@@ -212,29 +221,31 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           makeListItemContentBold = true;
         }
       }
-  
+
       if (isList) {
-        if (listItemText || makeListItemContentBold) { // Ensure we add li even if text is empty but bold marker was there
-          let processedNodes = processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`);
-          if (makeListItemContentBold) {
-            processedNodes = [<strong key={`bold-wrapper-${lineIdx}-${Date.now()}`}>{processedNodes.length > 0 ? processedNodes : <>&nbsp;</>}</strong>];
-          }
-          currentListItemGroup.push(processedNodes);
-        }
+         if (listItemText || makeListItemContentBold) {
+           let processedNodes = processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`);
+           if (makeListItemContentBold) {
+             processedNodes = [<strong key={`bold-wrapper-${lineIdx}-${Date.now()}`}>{processedNodes.length > 0 ? processedNodes : <>&nbsp;</>}</strong>];
+           }
+           currentListItemGroup.push(processedNodes);
+         }
       } else {
-        flushList(); 
-        if (originalLine.trim()) { 
+        flushList();
+        if (lineContentForProcessing.trim()) { // Only add non-empty paragraphs
             elements.push(
               <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
-                {processLineForBold(originalLine, `p-content-${elements.length}-line-${lineIdx}`)}
+                {processLineForBold(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
               </p>
             );
+        } else if (originalLine === '') { // Render empty lines if they were intentionally kept
+           elements.push(<p key={`p-empty-${elements.length}-line-${lineIdx}-${Date.now()}`} className="my-1">&nbsp;</p>);
         }
       }
     });
-  
-    flushList(); 
-  
+
+    flushList();
+
     if (elements.length === 0 && contentLines.some(l => l.trim() !== '')) {
         return [<p key={`no-details-provided-${Date.now()}`} className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
     } else if (elements.length === 0) {
@@ -257,8 +268,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       };
       const result = await refineItinerary(aiInput);
       onItineraryRefined(result.refinedItinerary);
-      setShowRefineForm(false); 
-      refineForm.reset(); 
+      setShowRefineForm(false);
+      refineForm.reset();
       toast({ title: "Itinerary Refined!", description: "Your updated itinerary is ready.", className: "bg-primary text-primary-foreground" });
     } catch (err) {
       console.error("Error refining itinerary:", err);
@@ -277,63 +288,51 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       toast({ title: "Error", description: "Could not find itinerary content to export.", variant: "destructive"});
       return;
     }
-    
-    setIsExportingPdf(true); // This will trigger UI changes (ScrollArea height) and button loading state
 
-    // Allow DOM to update with ScrollArea at full height
+    setIsExportingPdf(true);
+
     setTimeout(async () => {
-      if (!itineraryContentRef.current) { // Double check ref after timeout
+      if (!itineraryContentRef.current) {
         setIsExportingPdf(false);
         toast({ title: "Error", description: "Export cancelled, content not found after delay.", variant: "destructive"});
         return;
       }
       try {
-        const canvas = await html2canvas(itineraryContentRef.current, { 
-          scale: 2, 
-          useCORS: true, 
-          backgroundColor: '#ffffff',
-          // Use the full scroll height of the content for the canvas
+        const canvas = await html2canvas(itineraryContentRef.current, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff', // Ensures background is white for PDF
           windowHeight: itineraryContentRef.current.scrollHeight,
           windowWidth: itineraryContentRef.current.scrollWidth,
-          scrollY: 0, // Capture from the top of the element
+          scrollY: 0,
         });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const imgProps = pdf.getImageProperties(imgData);
-        const pdfMargin = 10; 
+        const pdfMargin = 10;
         const pdfWidth = pdf.internal.pageSize.getWidth() - 2 * pdfMargin;
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width; // Total height of the image scaled to PDF width
-        const pageContentHeight = pdf.internal.pageSize.getHeight() - 2 * pdfMargin; // Usable height on one PDF page
-        
-        let currentImagePartY = 0; // The Y offset within the source canvas image
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        const pageContentHeight = pdf.internal.pageSize.getHeight() - 2 * pdfMargin;
+
+        let currentImagePartY = 0;
         let pageNumber = 0;
 
         while (currentImagePartY < imgProps.height) {
           if (pageNumber > 0) {
             pdf.addPage();
           }
-          
-          const sourceX = 0;
-          const sourceY = currentImagePartY;
-          const sourceWidth = imgProps.width;
-          // Calculate how much of the source image height can fit on this PDF page
-          const sourceHeightThatFitsOnPage = Math.min(imgProps.height - currentImagePartY, (pageContentHeight / pdfHeight) * imgProps.height);
 
-          // Add the image segment to the PDF
-          // We are adding the *entire* canvas image (imgData) each time, but jsPDF clips it based on pdfHeight.
-          // For multi-page, we need to adjust the y-position of where the *entire* image is placed on the *new* page.
-          // The y-position for addImage on subsequent pages should be negative, shifting the full image upwards.
+          const sourceHeightThatFitsOnPage = Math.min(imgProps.height - currentImagePartY, (pageContentHeight / pdfHeight) * imgProps.height);
           const yPositionOnPdfPage = pageNumber === 0 ? pdfMargin : pdfMargin - (currentImagePartY / imgProps.height * pdfHeight);
 
           pdf.addImage(imgData, 'PNG', pdfMargin, yPositionOnPdfPage, pdfWidth, pdfHeight);
-          
+
           currentImagePartY += sourceHeightThatFitsOnPage;
           pageNumber++;
 
-          // Safety break for very long content, though jsPDF handles many pages
-          if (pageNumber > 50) { 
+          if (pageNumber > 50) {
             toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
-            break; 
+            break;
           }
         }
 
@@ -343,9 +342,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         console.error("Error exporting PDF:", err);
         toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF.", variant: "destructive"});
       } finally {
-        setIsExportingPdf(false); // Revert UI changes and button loading state
+        setIsExportingPdf(false);
       }
-    }, 300); // Increased delay slightly for DOM updates
+    }, 300);
   };
 
 
@@ -370,7 +369,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
 
   const parsedSections = parseItinerary(itinerary);
   const daySections = parsedSections.filter(s => s.isDaySection);
-  const otherSections = parsedSections.filter(s => !s.isDaySection);
+  const otherSections = parsedSections.filter(s => !s.isDaySection && s.title === "Overview");
+  const introSection = parsedSections.find(s => !s.isDaySection && s.title !== "Overview");
 
 
   return (
@@ -384,16 +384,18 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           <CardDescription className="font-body">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
         </div>
         <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
-          <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
-            <Edit3 className="mr-2 h-4 w-4" /> {showRefineForm ? "Cancel Refine" : "Refine Itinerary"}
-          </Button>
+          {canRefine && (
+            <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
+              <Edit3 className="mr-2 h-4 w-4" /> {showRefineForm ? "Cancel Refine" : "Refine Itinerary"}
+            </Button>
+          )}
           <Button onClick={handleExportPdf} variant="outline" className="text-primary border-primary hover:bg-primary/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
             {isExportingPdf ? <LoadingSpinner size={20} /> : <><Download className="mr-2 h-4 w-4" /> Export to PDF</>}
           </Button>
         </div>
       </CardHeader>
       <CardContent>
-        {showRefineForm && (
+        {canRefine && showRefineForm && (
           <Card className="mb-6 bg-secondary/50 p-2 sm:p-4 md:p-6 animate-fade-in">
             <CardHeader>
               <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Sparkles className="h-6 w-6"/>Refine Your Itinerary</CardTitle>
@@ -417,14 +419,22 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             </CardContent>
           </Card>
         )}
-        
+
         {(isRefining && !showRefineForm) && (
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
 
         <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
-          {/* ScrollArea's height is now conditional for PDF export */}
-          <ScrollArea className={`p-1 ${isExportingPdf ? 'h-auto overflow-y-visible' : 'h-[600px] overflow-y-auto'}`}> 
+          <ScrollArea className={`p-1 ${isExportingPdf ? 'h-auto overflow-y-visible' : 'h-[600px] overflow-y-auto'}`}>
+            {introSection && (
+                 <div key={`intro-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
+                    <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
+                        <introSection.icon className="mr-3 h-6 w-6 text-primary/80" />
+                        {introSection.title}
+                    </h3>
+                    {renderContent(introSection.content)}
+                 </div>
+            )}
             {otherSections.map((section, idx) => (
               <div key={`other-${idx}-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
                 <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -454,7 +464,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 ))}
               </Accordion>
             )}
-            {daySections.length === 0 && otherSections.length === 0 && itinerary && itinerary.trim() !== "" && (
+            {daySections.length === 0 && otherSections.length === 0 && !introSection && itinerary && itinerary.trim() !== "" && (
                  <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
                     <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
                         <BookOpenText className="mr-3 h-6 w-6 text-primary/80" />
@@ -469,16 +479,3 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
