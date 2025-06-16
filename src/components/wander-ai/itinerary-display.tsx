@@ -98,11 +98,12 @@ function parseItinerary(itineraryText: string): Section[] {
 
     if (!isNewPrimarySectionStart) {
       if (!currentSection) {
+        // This handles text that might appear before any recognized section like "Overview" or "Day X"
         currentSection = {
-          title: currentPrimaryTitle,
-          icon: currentPrimaryTitle === "Overview" ? sectionKeywords["Overview"].icon : (currentPrimaryTitle.match(dayRegex) ? sectionKeywords["Day \\d+"].icon : BookOpenText),
+          title: currentPrimaryTitle, // Could be "Introduction" or the first line itself if it's not a keyword
+          icon: BookOpenText, // Default icon for such introductory content
           content: [line],
-          isDaySection: !!currentPrimaryTitle.match(dayRegex),
+          isDaySection: false, // Assuming non-day section initially
         };
       } else {
         currentSection.content.push(line);
@@ -113,15 +114,17 @@ function parseItinerary(itineraryText: string): Section[] {
   if (currentSection) {
     parsedSections.push(currentSection);
   }
-
+  
+  // Clean up potentially empty "Introduction" section if an "Overview" also exists
   const introIndex = parsedSections.findIndex(s => s.title === "Introduction" && !s.isDaySection);
   if (introIndex !== -1 && parsedSections.some(s => s.title === "Overview")) {
+    // If introduction content is just whitespace or effectively empty, remove it.
     if (parsedSections[introIndex].content.every(c => c.trim() === '')) {
       parsedSections.splice(introIndex, 1);
     }
   }
-
-  return parsedSections.filter(s => s.content.some(c => c.trim() !== '') || s.content.length > 0 && s.title.match(dayRegex) );
+  
+  return parsedSections.filter(s => s.content.some(c => c.trim() !== '') || (s.isDaySection && s.content.length >= 0) );
 }
 
 
@@ -129,7 +132,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   const { toast } = useToast();
   const [showRefineForm, setShowRefineForm] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const itineraryContentRef = useRef<HTMLDivElement>(null);
+  const itineraryContentRef = useRef<HTMLDivElement>(null); // Ref for the main content container
 
   const refineForm = useForm<RefineFormInputType>({
     resolver: zodResolver(RefineItineraryInputSchema),
@@ -280,10 +283,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       toast({ title: "Error", description: "Could not find itinerary content to export.", variant: "destructive"});
       return;
     }
-
     setIsExportingPdf(true);
-    let svgDataUrl = '';
 
+    let svgDataUrl = '';
     const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#87CEEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22h20"></path><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"></path></svg>`;
     const svgContainer = document.createElement('div');
     svgContainer.style.position = 'absolute';
@@ -295,170 +297,217 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     document.body.appendChild(svgContainer);
 
     try {
-      const svgCanvas = await html2canvas(svgContainer, {
-        backgroundColor: null, // Transparent background for PNG
-        width: 64, // Capture at defined 64x64 size
-        height: 64,
-        scale: 1, // Capture at 1:1 pixel size
-      });
+      const svgCanvas = await html2canvas(svgContainer, { backgroundColor: null, width: 64, height: 64, scale: 1 });
       svgDataUrl = svgCanvas.toDataURL('image/png');
     } catch (e) {
       console.error("Error converting SVG logo to canvas image:", e);
       toast({ title: "PDF Export Error", description: "Could not render logo for PDF. Check console for details.", variant: "destructive" });
     } finally {
-      if (document.body.contains(svgContainer)) {
-        document.body.removeChild(svgContainer);
+      if (document.body.contains(svgContainer)) document.body.removeChild(svgContainer);
+    }
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const ptToMm = (pt: number) => pt * 0.352778;
+    const pageMarginMm = 10;
+    
+    // Header details
+    const logoPdfWidthMm = 10;
+    const logoPdfHeightMm = 10;
+    const textSpacingMm = 2;
+    const appNameText = "WanderAI";
+    const taglineText = "Your Personal AI Travel Planner";
+    const appNameFontSizePt = 12;
+    const taglineFontSizePt = 8;
+    const headerTopMarginMm = pageMarginMm;
+    const headerLeftMarginMm = pageMarginMm;
+    const appNameXMm = headerLeftMarginMm + logoPdfWidthMm + textSpacingMm;
+    const appNameBaselineYMm = headerTopMarginMm + (logoPdfHeightMm / 2) + (ptToMm(appNameFontSizePt) * 0.35); // Approx center of logo height
+    const taglineBaselineYMm = appNameBaselineYMm + ptToMm(taglineFontSizePt) + ptToMm(1); // Below app name
+    const headerBottomYMm = Math.max(headerTopMarginMm + logoPdfHeightMm, taglineBaselineYMm + ptToMm(taglineFontSizePt * 0.25));
+    const contentStartYOnPageMm = headerBottomYMm + 5; // 5mm gap below header
+
+    const drawPageHeader = () => {
+      if (svgDataUrl) {
+        try {
+          pdf.addImage(svgDataUrl, 'PNG', headerLeftMarginMm, headerTopMarginMm, logoPdfWidthMm, logoPdfHeightMm);
+        } catch (e) {
+          console.error("Error adding SVG image to PDF:", e);
+          pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(150,0,0);
+          pdf.text("[LOGO ERR]", headerLeftMarginMm, headerTopMarginMm + logoPdfHeightMm/2); pdf.setTextColor(0,0,0);
+        }
+      } else {
+        pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(128,128,128);
+        pdf.text("[LOGO]", headerLeftMarginMm, headerTopMarginMm + logoPdfHeightMm/2); pdf.setTextColor(0,0,0);
       }
-    }
-
-    if (!itineraryContentRef.current) {
-        setIsExportingPdf(false);
-        toast({ title: "Error", description: "Export cancelled, content not found after logo processing.", variant: "destructive"});
-        return;
-    }
-
-    try {
-      // Temporarily expand ScrollArea height for full content capture
-      const originalScrollAreaHeight = itineraryContentRef.current.style.height;
-      const originalScrollAreaOverflow = itineraryContentRef.current.style.overflowY;
-      itineraryContentRef.current.style.height = 'auto';
-      itineraryContentRef.current.style.overflowY = 'visible';
+      pdf.setFont("Helvetica", "bold"); pdf.setFontSize(appNameFontSizePt); pdf.setTextColor(135, 206, 235); // Sky Blue
+      pdf.text(appNameText, appNameXMm, appNameBaselineYMm);
+      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(taglineFontSizePt); pdf.setTextColor(105, 105, 105); // Dim Gray
+      pdf.text(taglineText, appNameXMm, taglineBaselineYMm);
+      pdf.setTextColor(0,0,0); // Reset color
+    };
+    
+    const addElementContentToPdf = async (element: HTMLElement, isFirstBlockOverall: boolean) => {
+      if (!element) return 0;
+      let pagesUsedForThisBlock = 0;
       
-      // Ensure parent of ScrollArea's direct child (the content div) is also unconstrained if needed
-      const scrollViewport = itineraryContentRef.current.querySelector('div[data-radix-scroll-area-viewport]') as HTMLElement | null;
-      let originalViewportHeight = '';
-      if (scrollViewport) {
-        originalViewportHeight = scrollViewport.style.height;
-        scrollViewport.style.height = 'auto';
+      // Temporarily ensure the accordion content is visible for capture if it's inside one
+      const accordionContentParent = element.closest('.radix-accordion-content');
+      let originalAccordionStyle = '';
+      if (accordionContentParent instanceof HTMLElement) {
+          originalAccordionStyle = accordionContentParent.style.cssText;
+          accordionContentParent.style.setProperty('display', 'block', 'important');
+          accordionContentParent.style.setProperty('height', 'auto', 'important');
+          accordionContentParent.style.setProperty('visibility', 'visible', 'important');
+          accordionContentParent.style.setProperty('overflow', 'visible', 'important');
       }
 
-      const mainContentCanvas = await html2canvas(itineraryContentRef.current, {
-        scale: 2, // Increase scale for better quality
-        useCORS: true,
-        backgroundColor: '#ffffff', // Capture with white background
-        // Ensure html2canvas captures the full scroll height
-        height: itineraryContentRef.current.scrollHeight,
-        windowHeight: itineraryContentRef.current.scrollHeight,
-        y: 0, // Start capture from the top
+
+      const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          width: element.offsetWidth, // Capture based on actual element width
+          height: element.scrollHeight, // Capture full scrollable height of the element
+          windowWidth: element.scrollWidth,
+          windowHeight: element.scrollHeight,
       });
 
-      // Restore ScrollArea height
-      itineraryContentRef.current.style.height = originalScrollAreaHeight;
-      itineraryContentRef.current.style.overflowY = originalScrollAreaOverflow;
-      if (scrollViewport) {
-        scrollViewport.style.height = originalViewportHeight;
+      if (accordionContentParent instanceof HTMLElement) {
+          accordionContentParent.style.cssText = originalAccordionStyle;
       }
 
-      const mainImgData = mainContentCanvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const mainImgProps = pdf.getImageProperties(mainImgData);
-
-      const ptToMm = (pt: number) => pt * 0.352778;
-
-      const pageMarginMm = 10;
-      const headerTopMarginMm = pageMarginMm;
-      const headerSideMarginMm = pageMarginMm; // For top-left
-
-      const logoPdfWidthMm = 10;
-      const logoPdfHeightMm = 10;
-      const textSpacingMm = 2; 
-
-      const appNameText = "WanderAI";
-      const taglineText = "Your Personal AI Travel Planner";
-      const appNameFontSizePt = 12;
-      const taglineFontSizePt = 8;
-      
-      const logoBottomYMm = headerTopMarginMm + logoPdfHeightMm;
-      const appNameBaselineYMm = headerTopMarginMm + (logoPdfHeightMm / 2) + (ptToMm(appNameFontSizePt) * 0.35); // Approx center
-      const taglineBaselineYMm = appNameBaselineYMm + ptToMm(taglineFontSizePt) + ptToMm(1); 
-
-      const headerBottomYMm = Math.max(logoBottomYMm, taglineBaselineYMm + ptToMm(taglineFontSizePt * 0.25)); // Max height of header elements
-      const contentStartYOnPageMm = headerBottomYMm + 5; // 5mm gap below header
-
+      const imgData = canvas.toDataURL('image/png');
+      const imgProps = pdf.getImageProperties(imgData);
       const imageStripWidthOnPageMm = pdf.internal.pageSize.getWidth() - 2 * pageMarginMm;
-      const totalImageStripHeightPdfUnits = (mainImgProps.height * imageStripWidthOnPageMm) / mainImgProps.width;
-
+      const totalImageStripHeightPdfUnits = (imgProps.height * imageStripWidthOnPageMm) / imgProps.width;
+      
       let currentImagePartYSrcPixels = 0;
-      let pageNumber = 0;
-      const maxPages = 50; // Safety break
+      let isFirstPageOfThisBlock = true;
 
-      while (currentImagePartYSrcPixels < mainImgProps.height && pageNumber < maxPages) {
-        if (pageNumber > 0) {
-          pdf.addPage();
-        }
-        pageNumber++;
-
-        const currentPageHeightMm = pdf.internal.pageSize.getHeight();
-
-        // --- START PDF HEADER (Top Left) ---
-        if (svgDataUrl) {
-          try {
-            pdf.addImage(svgDataUrl, 'PNG', headerSideMarginMm, headerTopMarginMm, logoPdfWidthMm, logoPdfHeightMm);
-          } catch (e) {
-            console.error("Error adding SVG image to PDF (page " + pageNumber + "):", e);
-            pdf.setFont("Helvetica", "normal");
-            pdf.setFontSize(8);
-            pdf.setTextColor(150, 0, 0); // Red for error
-            pdf.text("[LOGO ERR]", headerSideMarginMm, headerTopMarginMm + logoPdfHeightMm/2);
-            pdf.setTextColor(0,0,0); // Reset color
+      while (currentImagePartYSrcPixels < imgProps.height) {
+          if (isFirstPageOfThisBlock) {
+              if (!isFirstBlockOverall) { // If not the very first block in the PDF, start a new page
+                  pdf.addPage();
+              }
+              isFirstPageOfThisBlock = false;
+          } else { // Subsequent pages for this current block
+              pdf.addPage();
           }
-        } else {
-          pdf.setFont("Helvetica", "normal");
-          pdf.setFontSize(8);
-          pdf.setTextColor(128, 128, 128); // Gray for placeholder
-          pdf.text("[LOGO]", headerSideMarginMm, headerTopMarginMm + logoPdfHeightMm/2);
+          pagesUsedForThisBlock++;
+          drawPageHeader();
+
+          const currentPageHeightMm = pdf.internal.pageSize.getHeight();
+          const pageRenderableHeightForImageMm = currentPageHeightMm - contentStartYOnPageMm - pageMarginMm;
+          const scrollAmountPdfUnits = (currentImagePartYSrcPixels / imgProps.height) * totalImageStripHeightPdfUnits;
+          const yOffsetForImageStripMm = contentStartYOnPageMm - scrollAmountPdfUnits;
+
+          pdf.addImage(imgData, 'PNG', pageMarginMm, yOffsetForImageStripMm, imageStripWidthOnPageMm, totalImageStripHeightPdfUnits);
+
+          if (totalImageStripHeightPdfUnits > 0) {
+              currentImagePartYSrcPixels += (pageRenderableHeightForImageMm / totalImageStripHeightPdfUnits) * imgProps.height;
+          } else {
+              currentImagePartYSrcPixels = imgProps.height; // Prevent infinite loop if height is 0
+          }
+           if (pagesUsedForThisBlock > 20) { // Safety break per block
+            console.warn("PDF export truncated for a block due to excessive length.");
+            break;
+          }
+      }
+      return pagesUsedForThisBlock;
+    };
+
+    let isFirstBlockBeingProcessed = true;
+    const maxTotalPages = 50; // Safety break for total PDF pages
+    let totalPagesGenerated = 0;
+
+    // Determine the order of sections for PDF export
+    const parsedSectionsForPdf = parseItinerary(itinerary || "");
+    const sectionElementsToCapture: {id: string, element: HTMLElement | null}[] = [];
+
+    const introElement = document.getElementById('pdf-export-intro');
+    if (introElement) sectionElementsToCapture.push({id: 'pdf-export-intro', element: introElement});
+
+    parsedSectionsForPdf.forEach((section, idx) => {
+        if (section.title.toLowerCase() === "overview" && !section.isDaySection) {
+            const overviewEl = document.getElementById(`pdf-export-overview-${idx}`);
+            if (overviewEl) sectionElementsToCapture.push({id: `pdf-export-overview-${idx}`, element: overviewEl});
+        } else if (section.isDaySection) {
+            // Find the ID based on the original daySections array structure, if possible
+            // This relies on the order of parsedSectionsForPdf matching the rendering order.
+            // A more robust way would be to pass the index from parsedSectionsForPdf.
+            // For now, let's assume the index in parsedSectionsForPdf corresponds to 'day-idx' if it's a day section.
+            const dayCardEl = document.getElementById(`pdf-export-day-${idx}`); // Potential issue if idx doesn't map directly
+            if (dayCardEl) sectionElementsToCapture.push({id:`pdf-export-day-${idx}`, element: dayCardEl});
+        }
+    });
+    
+    // Correctly map day section IDs from their original rendering index
+    const daySectionElements = [];
+    const renderedDaySections = parsedSections.filter(s => s.isDaySection); // The array used for rendering
+    renderedDaySections.forEach((_, originalRenderIdx) => {
+        const dayCardEl = document.getElementById(`pdf-export-day-${originalRenderIdx}`);
+        if(dayCardEl && !sectionElementsToCapture.find(s => s.id === `pdf-export-day-${originalRenderIdx}`)){ // Ensure not duplicated if overview was also a 'day'
+            daySectionElements.push({id: `pdf-export-day-${originalRenderIdx}`, element: dayCardEl});
+        }
+    });
+    
+    // Build the final list, ensuring Overview comes before Days if both exist.
+    const finalElementsToCapture : {id: string, element: HTMLElement | null}[] = [];
+    if (introElement) finalElementsToCapture.push({id: 'pdf-export-intro', element: introElement});
+    
+    const overviewRenderIdx = parsedSectionsForPdf.findIndex(s => s.title.toLowerCase() === "overview" && !s.isDaySection);
+    if (overviewRenderIdx !== -1) {
+        const overviewEl = document.getElementById(`pdf-export-overview-${overviewRenderIdx}`);
+        if (overviewEl) finalElementsToCapture.push({id: `pdf-export-overview-${overviewRenderIdx}`, element: overviewEl});
+    }
+    
+    renderedDaySections.forEach((_, originalRenderIdx) => {
+        const dayCardEl = document.getElementById(`pdf-export-day-${originalRenderIdx}`);
+        if(dayCardEl){
+            finalElementsToCapture.push({id: `pdf-export-day-${originalRenderIdx}`, element: dayCardEl});
+        }
+    });
+    
+    // Remove duplicates by ID, preserving order
+    const uniqueFinalElementsToCapture = finalElementsToCapture.filter((item, index, self) =>
+        index === self.findIndex((t) => t.id === item.id)
+    );
+
+
+    try {
+        for (const { element } of uniqueFinalElementsToCapture) {
+            if (totalPagesGenerated >= maxTotalPages) {
+                toast({ title: "Warning", description: "PDF export truncated due to maximum page limit.", variant: "destructive" });
+                break;
+            }
+            if (element) {
+                const pagesUsed = await addElementContentToPdf(element, isFirstBlockBeingProcessed);
+                if (pagesUsed > 0) {
+                    isFirstBlockBeingProcessed = false; // Only the very first block doesn't trigger an initial addPage
+                    totalPagesGenerated += pagesUsed;
+                }
+            }
         }
 
-        pdf.setFont("Helvetica", "bold");
-        pdf.setFontSize(appNameFontSizePt);
-        pdf.setTextColor(135, 206, 235); // Sky Blue (#87CEEB)
-        const appNameXMm = headerSideMarginMm + logoPdfWidthMm + textSpacingMm;
-        pdf.text(appNameText, appNameXMm, appNameBaselineYMm);
-
-        pdf.setFont("Helvetica", "normal");
-        pdf.setFontSize(taglineFontSizePt);
-        pdf.setTextColor(105, 105, 105); // Dim Gray
-        const taglineXMm = appNameXMm;
-        pdf.text(taglineText, taglineXMm, taglineBaselineYMm);
-        // --- END PDF HEADER ---
-
-        pdf.setTextColor(0, 0, 0); // Reset text color for main content
-
-        const pageRenderableHeightForImageMm = currentPageHeightMm - contentStartYOnPageMm - pageMarginMm; // Space for content on current page
-        const scrollAmountPdfUnits = (currentImagePartYSrcPixels / mainImgProps.height) * totalImageStripHeightPdfUnits;
-        const yOffsetForImageStripMm = contentStartYOnPageMm - scrollAmountPdfUnits; // This defines where the "top" of the full image strip is placed on the current PDF page
-
-        pdf.addImage(mainImgData, 'PNG',
-          pageMarginMm, // X position of image strip
-          yOffsetForImageStripMm, // Y position of image strip
-          imageStripWidthOnPageMm, // Width of image strip on PDF page
-          totalImageStripHeightPdfUnits // Total height of the full image strip if rendered at imageStripWidthOnPageMm
-        );
-        
-        if (totalImageStripHeightPdfUnits > 0) {
-           currentImagePartYSrcPixels += (pageRenderableHeightForImageMm / totalImageStripHeightPdfUnits) * mainImgProps.height;
-        } else {
-           currentImagePartYSrcPixels = mainImgProps.height; // Should not happen if imgProps.height > 0
+        if (totalPagesGenerated === 0 && uniqueFinalElementsToCapture.length === 0) { // Nothing was processed
+            drawPageHeader(); // Draw header on the first page
+            pdf.text("No content to export.", pageMarginMm, contentStartYOnPageMm + 10);
+            totalPagesGenerated = 1;
+        } else if (totalPagesGenerated === 0 && uniqueFinalElementsToCapture.length > 0) { // Content existed but addElementToPdf returned 0 pages (e.g. all elements were null or empty)
+            drawPageHeader();
+            pdf.text("Selected content was empty or could not be rendered.", pageMarginMm, contentStartYOnPageMm + 10);
+            totalPagesGenerated = 1;
         }
 
-      }
-      if (pageNumber >= maxPages) {
-         toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
-      }
 
-      pdf.save('wanderai-itinerary.pdf');
-      toast({ title: "Export Successful", description: "Your itinerary has been downloaded as a PDF.", className: "bg-primary text-primary-foreground" });
+        pdf.save('wanderai-itinerary.pdf');
+        toast({ title: "Export Successful", description: `Your itinerary (${totalPagesGenerated} page(s)) has been downloaded as a PDF.`, className: "bg-primary text-primary-foreground" });
+
     } catch (err) {
-      console.error("Error exporting PDF:", err);
-      toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF. Check console.", variant: "destructive"});
-       // Restore ScrollArea height on error too
-      itineraryContentRef.current.style.height = originalScrollAreaHeight;
-      itineraryContentRef.current.style.overflowY = originalScrollAreaOverflow;
-      if (scrollViewport) {
-        scrollViewport.style.height = originalViewportHeight;
-      }
+        console.error("Error during PDF export loop:", err);
+        toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF. Check console.", variant: "destructive"});
     } finally {
-      setIsExportingPdf(false);
+        setIsExportingPdf(false);
     }
   };
 
@@ -484,8 +533,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
 
   const parsedSections = parseItinerary(itinerary);
   const daySections = parsedSections.filter(s => s.isDaySection);
-  const otherSections = parsedSections.filter(s => !s.isDaySection && s.title === "Overview");
-  const introSection = parsedSections.find(s => !s.isDaySection && s.title !== "Overview");
+  const otherSections = parsedSections.filter(s => !s.isDaySection && s.title.toLowerCase() === "overview");
+  // Ensure introSection correctly captures content that isn't "Overview" or a "Day" section
+  const introSection = parsedSections.find(s => !s.isDaySection && s.title.toLowerCase() !== "overview");
 
 
   return (
@@ -538,15 +588,14 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         {(isRefining && !showRefineForm) && (
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
-
+        
+        {/* This div is the one `itineraryContentRef` refers to. It contains all displayable itinerary parts. */}
         <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
-           {/* The ScrollArea's height is now controlled by isExportingPdf state indirectly via its child's styling */}
-          <ScrollArea className={`p-1 ${isExportingPdf ? 'h-auto overflow-y-visible' : 'h-[600px] overflow-y-auto'}`}>
-            {/* This div is the direct child of ScrollArea and what html2canvas will target. */}
-            {/* Its styling might need to be adjusted by the `isExportingPdf` state if necessary. */}
-            <div className={`${isExportingPdf ? 'h-auto' : ''}`}> 
+           {/* The ScrollArea is primarily for on-screen viewing. PDF capture targets elements within. */}
+          <ScrollArea className="h-[600px] overflow-y-auto p-1">
+            <div className="space-y-4"> {/* Added space-y-4 for better visual separation of blocks */}
               {introSection && (
-                  <div key={`intro-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
+                  <div id="pdf-export-intro" key={`intro-${Date.now()}`} className="mb-6 p-4 border border-input rounded-lg shadow-sm bg-background text-foreground">
                       <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
                           <introSection.icon className="mr-3 h-6 w-6 text-primary/80" />
                           {introSection.title}
@@ -555,7 +604,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                   </div>
               )}
               {otherSections.map((section, idx) => (
-                <div key={`other-${idx}-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
+                // Ensure overview sections are uniquely identifiable if multiple could exist (though typically one)
+                <div id={`pdf-export-overview-${idx}`} key={`overview-${idx}-${Date.now()}`} className="mb-6 p-4 border border-input rounded-lg shadow-sm bg-background text-foreground">
                   <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
                     <section.icon className="mr-3 h-6 w-6 text-primary/80" />
                     {section.title}
@@ -568,7 +618,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 <Accordion type="multiple" className="w-full" defaultValue={daySections.map((_,idx) => `day-${idx}`)}>
                   {daySections.map((section, idx) => (
                     <AccordionItem value={`day-${idx}`} key={`day-${idx}-${Date.now()}`} className="mb-2 border-b-0 last:mb-0">
-                      <Card className="shadow-sm overflow-hidden bg-background text-foreground">
+                       {/* ID added to the Card which contains all visual elements for a day */}
+                      <Card id={`pdf-export-day-${idx}`} className="shadow-sm overflow-hidden bg-background text-foreground">
                           <AccordionTrigger className="p-4 hover:no-underline hover:bg-secondary/50 transition-colors rounded-t-lg">
                             <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
                               <section.icon className="mr-3 h-6 w-6 text-primary/80" />
@@ -583,8 +634,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                   ))}
                 </Accordion>
               )}
+              {/* Fallback for itineraries that might not be parsed into sections by parseItinerary */}
               {daySections.length === 0 && otherSections.length === 0 && !introSection && itinerary && itinerary.trim() !== "" && (
-                  <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
+                  <div id="pdf-export-fallback-full" className="mb-6 p-4 border border-input rounded-lg shadow-sm bg-background text-foreground">
                       <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
                           <BookOpenText className="mr-3 h-6 w-6 text-primary/80" />
                           Generated Itinerary
@@ -592,10 +644,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                       {renderContent(itinerary.split('\n'))}
                   </div>
               )}
-            </div> {/* End of content div for html2canvas target */}
+            </div> 
           </ScrollArea>
         </div>
       </CardContent>
     </Card>
   );
 }
+
