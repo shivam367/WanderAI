@@ -133,9 +133,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   const [showRefineForm, setShowRefineForm] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   
-  // itineraryContentRef is not used anymore for single large capture
-  // const itineraryContentRef = useRef<HTMLDivElement>(null); 
-
   const refineForm = useForm<RefineFormInputType>({
     resolver: zodResolver(RefineItineraryInputSchema),
     defaultValues: { userFeedback: "" },
@@ -281,249 +278,274 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   };
 
   const handleExportPdf = async () => {
+    if (!itinerary) {
+      toast({ title: "Error", description: "No itinerary content to export.", variant: "destructive" });
+      return;
+    }
     setIsExportingPdf(true);
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const PAGE_MARGIN_MM = 12;
+    const PAGE_MARGIN_MM = 10; // Main page margin
     const PDF_PAGE_WIDTH = pdf.internal.pageSize.getWidth();
     const PDF_PAGE_HEIGHT = pdf.internal.pageSize.getHeight();
     const MAX_CONTENT_WIDTH_MM = PDF_PAGE_WIDTH - 2 * PAGE_MARGIN_MM;
 
     let svgDataUrl = '';
+    // SVG string with explicit dimensions and stroke for reliable capture
     const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#87CEEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22h20"></path><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"></path></svg>`;
     
     const tempSvgContainer = document.createElement('div');
-    tempSvgContainer.style.position = 'absolute'; tempSvgContainer.style.left = '-9999px'; tempSvgContainer.innerHTML = svgLogoString;
+    tempSvgContainer.id = 'temp-svg-container-for-pdf-export'; // Unique ID
+    tempSvgContainer.style.position = 'absolute';
+    tempSvgContainer.style.left = '-9999px'; // Position off-screen
+    tempSvgContainer.style.width = '64px'; // Explicit width
+    tempSvgContainer.style.height = '64px'; // Explicit height
+    tempSvgContainer.innerHTML = svgLogoString;
     document.body.appendChild(tempSvgContainer);
+
     try {
-      const svgCanvas = await html2canvas(tempSvgContainer.firstChild as HTMLElement, { backgroundColor: null, scale: 2 });
-      svgDataUrl = svgCanvas.toDataURL('image/png');
+      const svgElementToCapture = tempSvgContainer.querySelector('svg');
+      if (svgElementToCapture) {
+        const svgCanvas = await html2canvas(svgElementToCapture, {
+          scale: 2, // Capture at double resolution for clarity
+          backgroundColor: null, // Ensure transparent background for the PNG
+          width: 64, // Explicit capture width
+          height: 64, // Explicit capture height
+          logging: false, // Suppress html2canvas console logs
+        });
+        svgDataUrl = svgCanvas.toDataURL('image/png');
+      } else {
+        throw new Error("SVG element for logo not found in temporary container during PDF export.");
+      }
     } catch (e) {
-      console.error("Error converting SVG logo to canvas image:", e);
+      console.error("Error converting SVG logo to canvas image for PDF:", e);
+      toast({ title: "PDF Logo Error", description: "Could not render the logo for the PDF. Check console.", variant: "destructive" });
     } finally {
-      document.body.removeChild(tempSvgContainer);
+      // Ensure the temporary container is removed even if an error occurs
+      if (document.body.contains(tempSvgContainer)) {
+        document.body.removeChild(tempSvgContainer);
+      }
     }
 
     const LOGO_HEIGHT_MM = 8;
     const LOGO_WIDTH_MM = 8;
-    const HEADER_TEXT_SPACING_MM = 2;
-    const HEADER_TOTAL_HEIGHT_MM = LOGO_HEIGHT_MM + HEADER_TEXT_SPACING_MM; // Approximate
+    const HEADER_TEXT_SPACING_MM = 2; 
+    const HEADER_TOTAL_HEIGHT_MM = LOGO_HEIGHT_MM + 5; 
 
-    const FOOTER_LINE_Y_OFFSET = 5; // From bottom margin
-    const FOOTER_TEXT_Y_OFFSET = 8; // From bottom margin, for text baseline
-    const FOOTER_TOTAL_HEIGHT_MM = 15;
+    const FOOTER_LINE_Y_OFFSET_FROM_BOTTOM_MARGIN = 10;
+    const FOOTER_TEXT_Y_OFFSET_FROM_BOTTOM_MARGIN = 7;
+    const FOOTER_TOTAL_HEIGHT_MM = 15; 
 
-    const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_TOTAL_HEIGHT_MM + 5; // 5mm gap after header
+    const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_TOTAL_HEIGHT_MM;
     const MAX_CONTENT_HEIGHT_ON_PAGE_MM = PDF_PAGE_HEIGHT - CONTENT_START_Y_MM - FOOTER_TOTAL_HEIGHT_MM - PAGE_MARGIN_MM;
     
     const generationTimestamp = format(new Date(), "MMMM d, yyyy 'at' h:mm a");
 
     const drawPageHeaderAndFooter = (currentPageNum: number) => {
-      // Header
+      const logoX = PAGE_MARGIN_MM;
+      const logoY = PAGE_MARGIN_MM;
       if (svgDataUrl) {
-        try { pdf.addImage(svgDataUrl, 'PNG', PAGE_MARGIN_MM, PAGE_MARGIN_MM, LOGO_WIDTH_MM, LOGO_HEIGHT_MM); }
-        catch (e) { console.error("Error adding logo image to PDF:", e); pdf.text("[Logo]", PAGE_MARGIN_MM, PAGE_MARGIN_MM + LOGO_HEIGHT_MM / 2); }
-      } else { pdf.text("[Logo]", PAGE_MARGIN_MM, PAGE_MARGIN_MM + LOGO_HEIGHT_MM / 2); }
+        try { 
+          pdf.addImage(svgDataUrl, 'PNG', logoX, logoY, LOGO_WIDTH_MM, LOGO_HEIGHT_MM); 
+        } catch (imgError) { 
+          console.error("Error adding SVG logo image to PDF page:", imgError); 
+          pdf.setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
+        }
+      } else {
+        pdf.setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2); // Fallback if svgDataUrl is empty
+      }
       
-      pdf.setFont("Helvetica", "bold"); pdf.setFontSize(12); pdf.setTextColor(135, 206, 235); // Sky Blue for WanderAI
-      pdf.text("WanderAI", PAGE_MARGIN_MM + LOGO_WIDTH_MM + HEADER_TEXT_SPACING_MM, PAGE_MARGIN_MM + (LOGO_HEIGHT_MM / 2) + 1); // Adjusted Y for baseline
+      const textStartX = logoX + LOGO_WIDTH_MM + HEADER_TEXT_SPACING_MM;
+      pdf.setFont("Helvetica", "bold"); pdf.setFontSize(12); pdf.setTextColor(135, 206, 235); 
+      pdf.text("WanderAI", textStartX, logoY + (LOGO_HEIGHT_MM / 2) - 1); 
       
-      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(105, 105, 105); // Dim Gray for tagline
-      pdf.text("Your Personal AI Travel Planner", PAGE_MARGIN_MM + LOGO_WIDTH_MM + HEADER_TEXT_SPACING_MM, PAGE_MARGIN_MM + (LOGO_HEIGHT_MM / 2) + 5); // Adjusted Y
-      pdf.setTextColor(0,0,0); // Reset color
+      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(105, 105, 105); 
+      pdf.text("Your Personal AI Travel Planner", textStartX, logoY + (LOGO_HEIGHT_MM / 2) + 3); 
+      pdf.setTextColor(0,0,0); 
 
-      // Footer
-      const footerLineY = PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TOTAL_HEIGHT_MM + FOOTER_LINE_Y_OFFSET;
-      pdf.setDrawColor(200, 200, 200); // Light gray line
+      const footerLineY = PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_LINE_Y_OFFSET_FROM_BOTTOM_MARGIN;
+      pdf.setDrawColor(200, 200, 200); 
       pdf.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH - PAGE_MARGIN_MM, footerLineY);
 
-      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(128, 128, 128); // Gray for footer text
+      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(128, 128, 128); 
       
       const pageNumText = `Page ${currentPageNum}`;
-      const pageNumTextWidth = pdf.getStringUnitWidth(pageNumText) * 8 / pdf.internal.scaleFactor; // Approx width
-      pdf.text(pageNumText, PDF_PAGE_WIDTH / 2 - pageNumTextWidth / 2, PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TOTAL_HEIGHT_MM + FOOTER_TEXT_Y_OFFSET + 3);
+      const pageNumTextWidth = pdf.getStringUnitWidth(pageNumText) * pdf.getFontSize() / pdf.internal.scaleFactor;
+      pdf.text(pageNumText, PDF_PAGE_WIDTH / 2 - pageNumTextWidth / 2, PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TEXT_Y_OFFSET_FROM_BOTTOM_MARGIN);
 
-      const appInfoText = "WanderAI - Your Personal AI Travel Planner";
-      pdf.text(appInfoText, PAGE_MARGIN_MM, PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TOTAL_HEIGHT_MM + FOOTER_TEXT_Y_OFFSET + 3);
+      const appInfoText = "WanderAI";
+      pdf.text(appInfoText, PAGE_MARGIN_MM, PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TEXT_Y_OFFSET_FROM_BOTTOM_MARGIN);
       
-      const dateTextWidth = pdf.getStringUnitWidth(generationTimestamp) * 8 / pdf.internal.scaleFactor;
-      pdf.text(generationTimestamp, PDF_PAGE_WIDTH - PAGE_MARGIN_MM - dateTextWidth, PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TOTAL_HEIGHT_MM + FOOTER_TEXT_Y_OFFSET + 3);
-      pdf.setTextColor(0,0,0); // Reset color
+      const dateTextWidth = pdf.getStringUnitWidth(generationTimestamp) * pdf.getFontSize() / pdf.internal.scaleFactor;
+      pdf.text(generationTimestamp, PDF_PAGE_WIDTH - PAGE_MARGIN_MM - dateTextWidth, PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TEXT_Y_OFFSET_FROM_BOTTOM_MARGIN);
+      pdf.setTextColor(0,0,0); 
     };
 
     let currentPageNum = 0;
-    let currentYOnPage = 0; // This will be reset for new pages
+    let currentYOnPage = CONTENT_START_Y_MM; 
 
-    const addContentToPage = async (elementId: string, isFirstSectionOnOverallPdf: boolean, forceNewPageForSection: boolean) => {
+    const addContentToPage = async (elementId: string, isFirstSectionOverall: boolean, forceNewPageForThisSection: boolean) => {
       const element = document.getElementById(elementId);
       if (!element) {
         console.warn(`Element with ID ${elementId} not found for PDF export.`);
-        return;
+        return false; 
       }
       
-      // Temporarily ensure the accordion content is visible for capture
       const accordionContentParent = element.closest('.radix-accordion-content');
       let originalAccordionStyle = '';
-      let originalAccordionTriggerState = '';
       if (accordionContentParent instanceof HTMLElement) {
           originalAccordionStyle = accordionContentParent.style.cssText;
           accordionContentParent.style.setProperty('display', 'block', 'important');
           accordionContentParent.style.setProperty('height', 'auto', 'important');
           accordionContentParent.style.setProperty('visibility', 'visible', 'important');
           accordionContentParent.style.setProperty('overflow', 'visible', 'important');
-
-          const trigger = (accordionContentParent.parentElement as HTMLElement)?.querySelector('[data-state]');
-          if (trigger) originalAccordionTriggerState = trigger.getAttribute('data-state') || '';
       }
-      
-      // Special handling for AccordionTrigger to ensure it's visible if it's the element
       let originalElementDisplay = element.style.display;
       if (element.classList.contains('radix-accordion-trigger') && element.offsetParent === null) {
-        element.style.display = 'flex'; // Or 'block', depending on its natural display
+        element.style.display = 'flex'; 
       }
 
       const canvas = await html2canvas(element, {
-        scale: 2, // Higher scale for better quality
+        scale: 2, 
         useCORS: true,
-        backgroundColor: '#ffffff', // Ensure background for content
-        width: element.offsetWidth,
-        height: element.scrollHeight,
+        backgroundColor: '#ffffff',
+        width: element.scrollWidth, 
+        height: element.scrollHeight, 
         windowWidth: element.scrollWidth,
         windowHeight: element.scrollHeight,
+        logging: false,
       });
 
-       // Restore accordion state
       if (accordionContentParent instanceof HTMLElement) {
         accordionContentParent.style.cssText = originalAccordionStyle;
-        const trigger = (accordionContentParent.parentElement as HTMLElement)?.querySelector('[data-state]');
-        if (trigger && originalAccordionTriggerState) trigger.setAttribute('data-state', originalAccordionTriggerState);
       }
       element.style.display = originalElementDisplay;
-
 
       const imgData = canvas.toDataURL('image/png');
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeightRatio = imgProps.height / imgProps.width;
+      
       const scaledImgHeightFullMm = MAX_CONTENT_WIDTH_MM * imgHeightRatio;
+      if (scaledImgHeightFullMm <= 0) return true; 
 
-      let imgPartStartYpx = 0; // Start Y for slicing from the source image (in pixels)
+      let imgPartStartYpx = 0; 
 
-      if (isFirstSectionOnOverallPdf) {
+      if (isFirstSectionOverall) {
         currentPageNum = 1;
         drawPageHeaderAndFooter(currentPageNum);
         currentYOnPage = CONTENT_START_Y_MM;
-      } else if (forceNewPageForSection || (currentYOnPage + Math.min(scaledImgHeightFullMm, MAX_CONTENT_HEIGHT_ON_PAGE_MM) > CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM)) {
-        // If forcing new page OR current section won't fit remaining space (even its first chunk)
+      } else if (forceNewPageForThisSection) {
         pdf.addPage();
         currentPageNum++;
         drawPageHeaderAndFooter(currentPageNum);
         currentYOnPage = CONTENT_START_Y_MM;
-      }
-      // If not forcing new page and there's some space, currentYOnPage remains.
-      // Add a small gap if we are continuing on the same page.
-      else if (currentYOnPage > CONTENT_START_Y_MM) {
-         currentYOnPage += 5; // Add 5mm gap between sections on the same page
-      }
-
-
-      while (imgPartStartYpx < imgProps.height) {
-        if (currentPageNum > 30) { // Safety break
-            console.warn("PDF export truncated due to excessive pages for a section.");
-            toast({ title: "PDF Warning", description: "Export truncated, too many pages.", variant: "destructive" });
-            return; 
-        }
-
-        const remainingPageHeightMm = (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM) - currentYOnPage;
-        if (remainingPageHeightMm <= 0) { // No space left on this page
+      } else {
+        const estimatedSpaceNeededForFirstChunk = Math.min(scaledImgHeightFullMm, MAX_CONTENT_HEIGHT_ON_PAGE_MM);
+        if (currentYOnPage + estimatedSpaceNeededForFirstChunk > (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM) ) {
             pdf.addPage();
             currentPageNum++;
             drawPageHeaderAndFooter(currentPageNum);
             currentYOnPage = CONTENT_START_Y_MM;
-            // Re-evaluate remainingPageHeightMm for the new page
-            // This should be MAX_CONTENT_HEIGHT_ON_PAGE_MM, but for safety:
-            // remainingPageHeightMm = (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM) - currentYOnPage;
+        } else if (currentYOnPage > CONTENT_START_Y_MM) { 
+            currentYOnPage += 3; 
+        }
+      }
+
+      const MAX_PDF_PAGES_PER_SECTION = 20; // Increased safety break
+      let pagesRenderedForThisSection = 0;
+
+      while (imgPartStartYpx < imgProps.height) {
+        if (pagesRenderedForThisSection >= MAX_PDF_PAGES_PER_SECTION) {
+            console.warn(`PDF export truncated for section ${elementId} due to excessive pages.`);
+            break;
         }
         
-        // Calculate how much of the image (in source pixels) can fit in remainingPageHeightMm
-        const heightOfImgPartToDrawMm = Math.min(remainingPageHeightMm, ( (imgProps.height - imgPartStartYpx) / imgProps.width ) * MAX_CONTENT_WIDTH_MM);
+        let remainingPageHeightMm = (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM) - currentYOnPage;
+        
+        if (remainingPageHeightMm <= 1) { 
+            pdf.addPage();
+            currentPageNum++;
+            drawPageHeaderAndFooter(currentPageNum);
+            currentYOnPage = CONTENT_START_Y_MM;
+            remainingPageHeightMm = MAX_CONTENT_HEIGHT_ON_PAGE_MM; // Reset for new page
+            pagesRenderedForThisSection++;
+        }
+        
+        const heightOfImgPartToDrawMm = Math.min(
+            remainingPageHeightMm, 
+            ((imgProps.height - imgPartStartYpx) / imgProps.width) * MAX_CONTENT_WIDTH_MM 
+        );
+
+        if (heightOfImgPartToDrawMm <= 0) { 
+            break; 
+        }
         const heightOfImgPartToDrawPx = (heightOfImgPartToDrawMm / MAX_CONTENT_WIDTH_MM) * imgProps.width;
 
-        if (heightOfImgPartToDrawPx <=0) { // Should not happen if remainingPageHeightMm > 0
-            imgPartStartYpx = imgProps.height; // Force break
-            continue;
-        }
-
         pdf.addImage(
-          imgData,
-          'PNG',
-          PAGE_MARGIN_MM,
-          currentYOnPage,
-          MAX_CONTENT_WIDTH_MM,
-          heightOfImgPartToDrawMm,
-          undefined, // alias
-          'NONE', // compression
-          0, // rotation
-          imgPartStartYpx, // srcX (relative to canvas) effectively 0 for full width
-          0, // srcY
-          imgProps.width, // srcWidth
-          heightOfImgPartToDrawPx  // srcHeight
+          imgData, 'PNG',
+          PAGE_MARGIN_MM, currentYOnPage,
+          MAX_CONTENT_WIDTH_MM, heightOfImgPartToDrawMm,
+          undefined, 'NONE', 0,
+          0, 
+          imgPartStartYpx, 
+          imgProps.width, 
+          heightOfImgPartToDrawPx 
         );
         
         imgPartStartYpx += heightOfImgPartToDrawPx;
         currentYOnPage += heightOfImgPartToDrawMm;
 
-        if (imgPartStartYpx < imgProps.height) { // More content from this section remains
-          if (currentYOnPage >= CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM - 1) { // -1 for small float inaccuracies
+        if (imgPartStartYpx < imgProps.height) { 
+          if (currentYOnPage >= (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM -1) ) { 
              pdf.addPage();
              currentPageNum++;
              drawPageHeaderAndFooter(currentPageNum);
              currentYOnPage = CONTENT_START_Y_MM;
+             pagesRenderedForThisSection++;
           }
         }
       }
+      return true; 
     };
 
     try {
-      const sectionsToExport = parseItinerary(itinerary || "");
+      const parsedSections = parseItinerary(itinerary || "");
+      const sectionsToExport = [...parsedSections.filter(s => !s.isDaySection && s.title.toLowerCase() === "introduction"),
+                                ...parsedSections.filter(s => !s.isDaySection && s.title.toLowerCase() === "overview"),
+                                ...parsedSections.filter(s => s.isDaySection), 
+                                ...parsedSections.filter(s => !s.isDaySection && !["introduction", "overview"].includes(s.title.toLowerCase()))]; 
+
       if (sectionsToExport.length === 0 && itinerary && itinerary.trim() !== "") {
-         // Fallback for unparsable content
          sectionsToExport.push({
-            id: "pdf-section-fallback", 
-            title: "Generated Itinerary", 
-            icon: BookOpenText, 
-            content: itinerary.split('\n'),
-            isDaySection: false 
+            id: "pdf-section-fallback", title: "Generated Itinerary", icon: BookOpenText, 
+            content: itinerary.split('\n'), isDaySection: false 
          });
       }
 
-      let isFirstContentBlock = true;
-      let dayCounter = 0; // To track Day 1, Day 2 etc for page break logic
+      let isFirstContentBlockOverall = true;
+      let dayCounter = 0; 
 
       for (const section of sectionsToExport) {
         let forceNewPage = false;
         if (section.isDaySection) {
             dayCounter++;
-            if (dayCounter > 1) { // Day 2 and onwards always start on a new page
+            if (dayCounter >= 1) { 
                 forceNewPage = true;
             }
-        } else if (section.title.toLowerCase() === "overview" && !isFirstContentBlock) {
-            // Overview also starts on new page if it's not the very first content.
+        } else if (section.title.toLowerCase() === "overview" && !isFirstContentBlockOverall && dayCounter === 0) {
             forceNewPage = true;
         }
         
-        await addContentToPage(section.id, isFirstContentBlock, forceNewPage);
-        isFirstContentBlock = false; // Only the very first section can set this
+        const success = await addContentToPage(section.id, isFirstContentBlockOverall, forceNewPage);
+        if (success) {
+            isFirstContentBlockOverall = false;
+        }
       }
       
-      if (currentPageNum === 0 && sectionsToExport.length === 0) { // If no sections and nothing drawn
+      if (currentPageNum === 0) { 
         currentPageNum = 1;
         drawPageHeaderAndFooter(currentPageNum);
         pdf.text("No content to export.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 10);
-      } else if (currentPageNum === 0 && sectionsToExport.length > 0) { // Sections existed but addContentToPage might not have started a page
-        currentPageNum = 1;
-        drawPageHeaderAndFooter(currentPageNum);
-        pdf.text("Content found but could not be rendered to PDF.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 10);
       }
-
 
       pdf.save('wanderai-itinerary.pdf');
       toast({ title: "Export Successful", description: `Your itinerary (${currentPageNum} page(s)) has been downloaded.`, className: "bg-primary text-primary-foreground" });
@@ -616,16 +638,16 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
         
-        {/* This div is for on-screen display styling, PDF capture targets elements by ID */}
         <div className="bg-background text-foreground p-1 rounded-md border border-input">
           <ScrollArea className="h-[600px] overflow-y-auto p-1">
             <div className="space-y-1">
               {allSectionsInOrder.map((section) => {
+                const sectionHtmlId = section.id; 
                 if (section.isDaySection) {
                    return (
-                    <Accordion type="multiple" className="w-full" defaultValue={[section.id]} key={section.id}>
-                        <AccordionItem value={section.id} className="mb-1 border-b-0 last:mb-0">
-                            <Card id={section.id} className="shadow-sm overflow-hidden bg-background/90 text-foreground my-1">
+                    <Accordion type="multiple" className="w-full" defaultValue={[sectionHtmlId]} key={sectionHtmlId}>
+                        <AccordionItem value={sectionHtmlId} className="mb-1 border-b-0 last:mb-0">
+                            <Card id={sectionHtmlId} className="shadow-sm overflow-hidden bg-background/90 text-foreground my-1">
                                 <AccordionTrigger className="p-3 hover:no-underline hover:bg-secondary/30 transition-colors rounded-t-lg w-full">
                                     <h3 className="text-lg font-headline font-semibold text-primary flex items-center">
                                     <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
@@ -640,9 +662,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                     </Accordion>
                    );
                 } else {
-                    // Non-day sections (Intro, Overview, other generic sections)
                     return (
-                        <Card id={section.id} key={section.id} className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
+                        <Card id={sectionHtmlId} key={sectionHtmlId} className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
                             <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
                                 <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
                                 {section.title}
@@ -652,7 +673,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                     );
                 }
               })}
-              {/* Fallback for itineraries that might not be parsed into sections by parseItinerary */}
               {allSectionsInOrder.length === 0 && itinerary && itinerary.trim() !== "" && (
                   <Card id="pdf-section-fallback" className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
                       <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
