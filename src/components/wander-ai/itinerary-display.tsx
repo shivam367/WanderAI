@@ -21,7 +21,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 // Fallback icon defined before its use
-const CalendarDaysIcon = ({className}: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
+const CalendarDays = ({className}: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
 
 interface ItineraryDisplayProps {
@@ -41,7 +41,7 @@ interface Section {
 }
 
 const sectionKeywords: Record<string, { title: string, icon: React.ElementType, isDayKeyword?: boolean }> = {
-  "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true },
+  "Day \\d+": { title: "Day {N}", icon: CalendarDays, isDayKeyword: true },
   "Activities": { title: "Activities & Attractions", icon: MountainSnow },
   "Attractions": { title: "Activities & Attractions", icon: MountainSnow },
   "Food Recommendations": { title: "Food Recommendations", icon: Utensils },
@@ -91,9 +91,8 @@ function parseItinerary(itineraryText: string): Section[] {
     if (!matchedKeyword && currentSection) {
       currentSection.content.push(line.trim());
     } else if (!matchedKeyword && !currentSection) {
-      // If no section has started, and this line doesn't start a section, treat it as part of a general overview.
       if (sections.length === 0 || sections[sections.length-1].title !== "Overview") {
-         if (currentSection) sections.push(currentSection); // Finalize previous if any
+         if (currentSection) sections.push(currentSection);
         currentSection = { title: "Overview", icon: BookOpenText, content: [] };
       }
       currentSection!.content.push(line.trim());
@@ -104,7 +103,6 @@ function parseItinerary(itineraryText: string): Section[] {
     sections.push(currentSection);
   }
   
-  // Fallback if no sections were parsed but there is text
   if (sections.length === 0 && itineraryText.trim() !== "") {
     sections.push({ title: "Generated Itinerary", icon: BookOpenText, content: itineraryText.split('\n').filter(l => l.trim() !== '') });
   }
@@ -162,7 +160,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const canvas = await html2canvas(itineraryContentRef.current, { 
         scale: 2, 
         useCORS: true, 
-        backgroundColor: '#ffffff', // Explicitly set background to white for PDF
+        backgroundColor: '#ffffff',
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -179,7 +177,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
-        position = heightLeft - pdfHeight + pdfMargin; // Recalculate position for subsequent pages
+        position = heightLeft - pdfHeight + pdfMargin;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pdfMargin, position, pdfWidth, pdfHeight);
         heightLeft -= pageHeight;
@@ -217,15 +215,30 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   const daySections = parsedSections.filter(s => s.isDaySection);
   const otherSections = parsedSections.filter(s => !s.isDaySection);
 
-  const renderContent = (contentLines: string[]) => {
+  const renderContent = (contentLines: string[]): JSX.Element[] => {
     const elements: JSX.Element[] = [];
     let currentListItems: string[] = [];
+
+    const processLineForBold = (line: string): React.ReactNode[] => {
+      // Split by markdown bold (e.g., **text**) and retain the delimiters for reconstruction
+      const parts = line.split(/(\*\*.*?\*\*)/g);
+      return parts.map((part, idx) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          // If it's a bold part, remove the asterisks and wrap in <strong>
+          return <strong key={`bold-${elements.length}-${idx}`}>{part.slice(2, -2)}</strong>;
+        }
+        // Otherwise, return the text part as is
+        return part;
+      });
+    };
   
     const flushList = () => {
       if (currentListItems.length > 0) {
         elements.push(
           <ul key={`ul-${elements.length}`} className="list-disc list-inside pl-3 my-2 space-y-1 font-body text-foreground/90">
-            {currentListItems.map((item, idx) => <li key={`li-${idx}`}>{item}</li>)}
+            {currentListItems.map((item, idx) => (
+              <li key={`li-${elements.length}-${idx}`}>{processLineForBold(item)}</li>
+            ))}
           </ul>
         );
         currentListItems = [];
@@ -234,16 +247,16 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
     contentLines.forEach((line) => {
       const trimmedLine = line.trim();
-      // Regex to identify list markers: "-", "*", or "number." / "number)"
-      if (/^(\s*(\-|\*)\s)|(^\s*\d+(\.|\))\s)/.test(trimmedLine)) {
+      // Regex to identify list markers: "-", "*", "•", or "number." / "number)"
+      if (/^(\s*(\-|\*|•)\s)|(^\s*\d+(\.|\))\s)/.test(trimmedLine)) {
         // Remove the marker for display and add to current list
-        currentListItems.push(trimmedLine.replace(/^(\s*(\-|\*)\s)|(^\s*\d+(\.|\))\s)/, '').trim());
+        currentListItems.push(trimmedLine.replace(/^(\s*(\-|\*|•)\s)|(^\s*\d+(\.|\))\s)/, '').trim());
       } else {
-        flushList(); // Render any pending list items
+        flushList(); // Render any pending list items before a paragraph
         if (trimmedLine) { // Only render non-empty lines as paragraphs
           elements.push(
             <p key={`p-${elements.length}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
-              {trimmedLine}
+              {processLineForBold(trimmedLine)}
             </p>
           );
         }
@@ -252,7 +265,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
     flushList(); // Ensure any trailing list items are rendered
   
-    return <>{elements.length > 0 ? elements : <p className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>}</>;
+    // If no content was parsed into elements (e.g., all lines were empty or just whitespace)
+    if (elements.length === 0) {
+        return [<p key="no-details" className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
+    }
+    return elements;
   };
 
   return (
@@ -304,9 +321,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
 
-        {/* This div is targeted by html2canvas for PDF export */}
-        <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border"> {/* Added explicit bg and text for PDF, plus padding */}
-          <ScrollArea className="h-[600px] p-1"> {/* ScrollArea now wraps content *inside* the PDF export div */}
+        <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
+          <ScrollArea className="h-[600px] p-1">
             {otherSections.map((section, idx) => (
               <div key={`other-${idx}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                 <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -321,7 +337,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
               <Accordion type="multiple" className="w-full" defaultValue={daySections.map((_,idx) => `day-${idx}`)}>
                 {daySections.map((section, idx) => (
                   <AccordionItem value={`day-${idx}`} key={`day-${idx}`} className="mb-2 border-b-0 last:mb-0">
-                     <Card className="shadow-sm overflow-hidden bg-background"> {/* Ensured card uses theme background */}
+                     <Card className="shadow-sm overflow-hidden bg-background">
                         <AccordionTrigger className="p-4 hover:no-underline hover:bg-secondary/50 transition-colors rounded-t-lg">
                           <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
                             <section.icon className="mr-3 h-6 w-6 text-primary/80" />
@@ -336,7 +352,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 ))}
               </Accordion>
             )}
-            {/* Fallback for when no sections are parsed but itinerary text exists */}
             {daySections.length === 0 && otherSections.length === 0 && itinerary && itinerary.trim() !== "" && (
                  <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                     <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -352,4 +367,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
+    
+
     
