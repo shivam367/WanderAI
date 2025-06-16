@@ -3,6 +3,7 @@
 
 import type React from "react";
 import { useState, useEffect, useCallback } from "react";
+import dynamic from 'next/dynamic';
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import ProtectedRoute from "@/components/auth/protected-route";
@@ -12,7 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Trash2, Eye, CalendarClock, MapPin, Info } from "lucide-react";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
-import { ItineraryDisplay } from "@/components/wander-ai/itinerary-display";
+// import { ItineraryDisplay } from "@/components/wander-ai/itinerary-display"; // Original import
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { format } from 'date-fns';
+
+const ItineraryDisplay = dynamic(() => 
+  import('@/components/wander-ai/itinerary-display').then(mod => mod.ItineraryDisplay),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col min-h-[400px] items-center justify-center">
+        <LoadingSpinner size={32} text="Loading itinerary viewer..." />
+      </div>
+    )
+  }
+);
 
 export default function HistoryPage() {
   const { currentUser, isLoading: authLoading } = useAuth();
