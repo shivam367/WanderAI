@@ -90,7 +90,7 @@ function parseItinerary(itineraryText: string): Section[] {
         if (currentSection) parsedSections.push({...currentSection, id: `pdf-section-${sectionCounter++}`});
         currentPrimaryTitle = "Overview";
         currentSection = {
-          title: currentPrimaryTitle,
+          title: sectionKeywords["Overview"].title,
           icon: sectionKeywords["Overview"].icon,
           content: [],
           isDaySection: false,
@@ -284,43 +284,36 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     }
     setIsExportingPdf(true);
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const PAGE_MARGIN_MM = 10; // Main page margin
+    const PAGE_MARGIN_MM = 10; 
     const PDF_PAGE_WIDTH = pdf.internal.pageSize.getWidth();
     const PDF_PAGE_HEIGHT = pdf.internal.pageSize.getHeight();
     const MAX_CONTENT_WIDTH_MM = PDF_PAGE_WIDTH - 2 * PAGE_MARGIN_MM;
 
     let svgDataUrl = '';
-    // SVG string with explicit dimensions and stroke for reliable capture
     const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#87CEEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22h20"></path><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"></path></svg>`;
     
     const tempSvgContainer = document.createElement('div');
-    tempSvgContainer.id = 'temp-svg-container-for-pdf-export'; // Unique ID
+    tempSvgContainer.id = 'temp-svg-container-for-pdf-export';
     tempSvgContainer.style.position = 'absolute';
-    tempSvgContainer.style.left = '-9999px'; // Position off-screen
-    tempSvgContainer.style.width = '64px'; // Explicit width
-    tempSvgContainer.style.height = '64px'; // Explicit height
+    tempSvgContainer.style.left = '-9999px'; 
+    tempSvgContainer.style.width = '64px'; 
+    tempSvgContainer.style.height = '64px';
     tempSvgContainer.innerHTML = svgLogoString;
     document.body.appendChild(tempSvgContainer);
 
     try {
-      const svgElementToCapture = tempSvgContainer.querySelector('svg');
-      if (svgElementToCapture) {
-        const svgCanvas = await html2canvas(svgElementToCapture, {
-          scale: 2, // Capture at double resolution for clarity
-          backgroundColor: null, // Ensure transparent background for the PNG
-          width: 64, // Explicit capture width
-          height: 64, // Explicit capture height
-          logging: false, // Suppress html2canvas console logs
-        });
-        svgDataUrl = svgCanvas.toDataURL('image/png');
-      } else {
-        throw new Error("SVG element for logo not found in temporary container during PDF export.");
-      }
+      const svgCanvas = await html2canvas(tempSvgContainer, { // Capture the container div
+        scale: 2,
+        backgroundColor: null,
+        width: 64, 
+        height: 64, 
+        logging: false, 
+      });
+      svgDataUrl = svgCanvas.toDataURL('image/png');
     } catch (e) {
-      console.error("Error converting SVG logo to canvas image for PDF:", e);
+      console.error("Error converting SVG logo to canvas image:", e);
       toast({ title: "PDF Logo Error", description: "Could not render the logo for the PDF. Check console.", variant: "destructive" });
     } finally {
-      // Ensure the temporary container is removed even if an error occurs
       if (document.body.contains(tempSvgContainer)) {
         document.body.removeChild(tempSvgContainer);
       }
@@ -351,7 +344,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           pdf.setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
         }
       } else {
-        pdf.setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2); // Fallback if svgDataUrl is empty
+        pdf.setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
       }
       
       const textStartX = logoX + LOGO_WIDTH_MM + HEADER_TEXT_SPACING_MM;
@@ -383,6 +376,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     let currentPageNum = 0;
     let currentYOnPage = CONTENT_START_Y_MM; 
 
+    const MAX_PDF_PAGES_PER_SECTION = 20; 
+
     const addContentToPage = async (elementId: string, isFirstSectionOverall: boolean, forceNewPageForThisSection: boolean) => {
       const element = document.getElementById(elementId);
       if (!element) {
@@ -391,7 +386,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       }
       
       const accordionContentParent = element.closest('.radix-accordion-content');
+      const scrollAreaViewPort = element.closest('.radix-scroll-area-viewport');
       let originalAccordionStyle = '';
+      let originalElementDisplay = element.style.display;
+      let originalScrollAreaViewportStyle = '';
+
       if (accordionContentParent instanceof HTMLElement) {
           originalAccordionStyle = accordionContentParent.style.cssText;
           accordionContentParent.style.setProperty('display', 'block', 'important');
@@ -399,10 +398,15 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           accordionContentParent.style.setProperty('visibility', 'visible', 'important');
           accordionContentParent.style.setProperty('overflow', 'visible', 'important');
       }
-      let originalElementDisplay = element.style.display;
       if (element.classList.contains('radix-accordion-trigger') && element.offsetParent === null) {
         element.style.display = 'flex'; 
       }
+      if (scrollAreaViewPort instanceof HTMLElement) {
+        originalScrollAreaViewportStyle = scrollAreaViewPort.style.cssText;
+        scrollAreaViewPort.style.height = 'auto';
+        scrollAreaViewPort.style.overflowY = 'visible';
+      }
+
 
       const canvas = await html2canvas(element, {
         scale: 2, 
@@ -419,6 +423,10 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         accordionContentParent.style.cssText = originalAccordionStyle;
       }
       element.style.display = originalElementDisplay;
+      if (scrollAreaViewPort instanceof HTMLElement) {
+        scrollAreaViewPort.style.cssText = originalScrollAreaViewportStyle;
+      }
+
 
       const imgData = canvas.toDataURL('image/png');
       const imgProps = pdf.getImageProperties(imgData);
@@ -450,7 +458,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         }
       }
 
-      const MAX_PDF_PAGES_PER_SECTION = 20; // Increased safety break
       let pagesRenderedForThisSection = 0;
 
       while (imgPartStartYpx < imgProps.height) {
@@ -466,7 +473,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             currentPageNum++;
             drawPageHeaderAndFooter(currentPageNum);
             currentYOnPage = CONTENT_START_Y_MM;
-            remainingPageHeightMm = MAX_CONTENT_HEIGHT_ON_PAGE_MM; // Reset for new page
+            remainingPageHeightMm = MAX_CONTENT_HEIGHT_ON_PAGE_MM; 
             pagesRenderedForThisSection++;
         }
         
@@ -522,17 +529,19 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       }
 
       let isFirstContentBlockOverall = true;
-      let dayCounter = 0; 
+      let previousSectionWasDay = false;
+
 
       for (const section of sectionsToExport) {
         let forceNewPage = false;
         if (section.isDaySection) {
-            dayCounter++;
-            if (dayCounter >= 1) { 
-                forceNewPage = true;
-            }
-        } else if (section.title.toLowerCase() === "overview" && !isFirstContentBlockOverall && dayCounter === 0) {
-            forceNewPage = true;
+            forceNewPage = true; 
+            previousSectionWasDay = true;
+        } else if (section.title.toLowerCase() === "overview" && !isFirstContentBlockOverall && !previousSectionWasDay) {
+             forceNewPage = true;
+             previousSectionWasDay = false;
+        } else {
+            previousSectionWasDay = false;
         }
         
         const success = await addContentToPage(section.id, isFirstContentBlockOverall, forceNewPage);
@@ -639,8 +648,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         )}
         
         <div className="bg-background text-foreground p-1 rounded-md border border-input">
-          <ScrollArea className="h-[600px] overflow-y-auto p-1">
-            <div className="space-y-1">
+          <ScrollArea className="h-[600px] overflow-y-auto p-1" id="itinerary-scroll-area-for-pdf">
+            <div className="space-y-1" id="itinerary-content-for-pdf">
               {allSectionsInOrder.map((section) => {
                 const sectionHtmlId = section.id; 
                 if (section.isDaySection) {
