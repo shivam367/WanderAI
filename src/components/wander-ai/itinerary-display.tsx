@@ -100,7 +100,7 @@ function parseItinerary(itineraryText: string): Section[] {
       if (!currentSection) {
         // Initialize with the default/current primary title if no section started yet
         currentSection = {
-          title: currentPrimaryTitle, 
+          title: currentPrimaryTitle,
           icon: currentPrimaryTitle === "Overview" ? sectionKeywords["Overview"].icon : (currentPrimaryTitle.match(dayRegex) ? sectionKeywords["Day \\d+"].icon : BookOpenText),
           content: [line],
           isDaySection: !!currentPrimaryTitle.match(dayRegex),
@@ -114,14 +114,14 @@ function parseItinerary(itineraryText: string): Section[] {
   if (currentSection) {
     parsedSections.push(currentSection);
   }
-  
+
   const introIndex = parsedSections.findIndex(s => s.title === "Introduction" && !s.isDaySection);
   if (introIndex !== -1 && parsedSections.some(s => s.title === "Overview")) {
     if (parsedSections[introIndex].content.every(c => c.trim() === '')) {
       parsedSections.splice(introIndex, 1);
     }
   }
-  
+
   return parsedSections.filter(s => s.content.some(c => c.trim() !== '') || s.content.length > 0 && s.title.match(dayRegex) );
 }
 
@@ -172,7 +172,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       let lineContentForProcessing = originalLine;
       let isSubheadingProcessed = false;
 
-      if (!trimmedStartLine.match(/^(Day\s+\d+|Overview)/i)) { 
+      if (!trimmedStartLine.match(/^(Day\s+\d+|Overview)/i)) {
         for (const keyword in sectionKeywords) {
           if (sectionKeywords[keyword].isDayKeyword || keyword.toLowerCase() === "overview") continue;
           const subheadingRegex = new RegExp(`^(${keyword.replace(/\\/g, '\\\\').replace(/\s/g, '\\s')}(?:\\s*Recommendations|\\s*Suggestions)?)\\s*:?(.*)`, "i");
@@ -190,11 +190,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             );
             lineContentForProcessing = match[2]?.trim() || "";
             isSubheadingProcessed = true;
-            if (!lineContentForProcessing) break; 
+            if (!lineContentForProcessing) break;
           }
         }
       }
-      if (isSubheadingProcessed && !lineContentForProcessing) return; 
+      if (isSubheadingProcessed && !lineContentForProcessing) return;
 
       let isList = false;
       let listItemText = "";
@@ -225,13 +225,13 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
          }
       } else {
         flushList();
-        if (lineContentForProcessing.trim()) { 
+        if (lineContentForProcessing.trim()) {
             elements.push(
               <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
                 {processLineForBold(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
               </p>
             );
-        } else if (originalLine === '') { 
+        } else if (originalLine === '') {
            elements.push(<p key={`p-empty-${elements.length}-line-${lineIdx}-${Date.now()}`} className="my-1">&nbsp;</p>);
         }
       }
@@ -284,124 +284,161 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
 
     setIsExportingPdf(true);
 
-    setTimeout(async () => {
-      if (!itineraryContentRef.current) {
+    const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#87CEEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22h20"></path><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"></path></svg>`;
+    let svgDataUrl = '';
+
+    const svgContainer = document.createElement('div');
+    svgContainer.style.position = 'absolute';
+    svgContainer.style.left = '-9999px';
+    svgContainer.style.top = '-9999px';
+    svgContainer.style.width = '64px';
+    svgContainer.style.height = '64px';
+    svgContainer.innerHTML = svgLogoString;
+    document.body.appendChild(svgContainer);
+
+    try {
+      const svgCanvas = await html2canvas(svgContainer, {
+        backgroundColor: null, // Transparent background for PNG
+        width: 64,
+        height: 64,
+        scale: 1, // Capture at defined 64x64 size
+      });
+      svgDataUrl = svgCanvas.toDataURL('image/png');
+    } catch (e) {
+      console.error("Error converting SVG to canvas image:", e);
+      toast({ title: "PDF Export Error", description: "Could not render logo for PDF.", variant: "destructive" });
+    } finally {
+      document.body.removeChild(svgContainer);
+    }
+
+
+    if (!itineraryContentRef.current) {
         setIsExportingPdf(false);
-        toast({ title: "Error", description: "Export cancelled, content not found after delay.", variant: "destructive"});
+        toast({ title: "Error", description: "Export cancelled, content not found after logo processing.", variant: "destructive"});
         return;
-      }
-      try {
-        const canvas = await html2canvas(itineraryContentRef.current, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff', 
-          windowHeight: itineraryContentRef.current.scrollHeight,
-          windowWidth: itineraryContentRef.current.scrollWidth,
-          scrollY: 0, 
-        });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgProps = pdf.getImageProperties(imgData);
-        
-        const ptToMm = (pt: number) => pt * 0.352778;
+    }
 
-        const contentPageMargin = 10; // mm 
+    try {
+      const mainContentCanvas = await html2canvas(itineraryContentRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowHeight: itineraryContentRef.current.scrollHeight,
+        windowWidth: itineraryContentRef.current.scrollWidth,
+        scrollY: 0,
+      });
+      const mainImgData = mainContentCanvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const mainImgProps = pdf.getImageProperties(mainImgData);
 
-        const imageStripWidth_onPage = pdf.internal.pageSize.getWidth() - 2 * contentPageMargin;
-        const totalImageStripHeight_pdf_units = (imgProps.height * imageStripWidth_onPage) / imgProps.width;
+      const ptToMm = (pt: number) => pt * 0.352778;
 
-        let currentImagePartY_src_pixels = 0; 
-        let pageNumber = 0;
+      const pageMarginMm = 10;
+      const headerSideMarginMm = pageMarginMm;
+      const headerTopMarginMm = pageMarginMm;
 
-        while (currentImagePartY_src_pixels < imgProps.height) {
-          if (pageNumber > 0) {
-            pdf.addPage();
+      // Logo and Text settings
+      const logoPdfWidthMm = 10;
+      const logoPdfHeightMm = 10;
+      const textSpacingMm = 2; // Space between logo and app name
+
+      const appNameText = "WanderAI";
+      const taglineText = "Your Personal AI Travel Planner";
+      const appNameFontSizePt = 12;
+      const taglineFontSizePt = 8;
+
+      // Calculate Y baselines for header text
+      const logoBottomYMm = headerTopMarginMm + logoPdfHeightMm;
+      // Align app name text with the vertical center of the logo image for better visual balance
+      const appNameBaselineYMm = headerTopMarginMm + (logoPdfHeightMm / 2) + (ptToMm(appNameFontSizePt) * 0.35); // Approx center
+      const taglineBaselineYMm = appNameBaselineYMm + ptToMm(taglineFontSizePt) + ptToMm(1); // 1mm gap
+
+      // Determine header bottom to calculate where main content starts
+      // The header bottom will be the max of logo bottom or tagline bottom.
+      const headerBottomYMm = Math.max(logoBottomYMm, taglineBaselineYMm + ptToMm(taglineFontSizePt * 0.25));
+      const contentStartYOnPageMm = headerBottomYMm + 5; // 5mm gap below header
+
+      // Main content image strip dimensions on PDF page
+      const imageStripWidthOnPageMm = pdf.internal.pageSize.getWidth() - 2 * pageMarginMm;
+      const totalImageStripHeightPdfUnits = (mainImgProps.height * imageStripWidthOnPageMm) / mainImgProps.width;
+
+      let currentImagePartYSrcPixels = 0;
+      let pageNumber = 0;
+
+      while (currentImagePartYSrcPixels < mainImgProps.height) {
+        if (pageNumber > 0) {
+          pdf.addPage();
+        }
+        pageNumber++;
+
+        const currentPageHeightMm = pdf.internal.pageSize.getHeight();
+
+        // --- START PDF HEADER (Top Left) ---
+        // 1. Draw Logo Image (if available)
+        if (svgDataUrl) {
+          try {
+            pdf.addImage(svgDataUrl, 'PNG', headerSideMarginMm, headerTopMarginMm, logoPdfWidthMm, logoPdfHeightMm);
+          } catch (e) {
+            console.error("Error adding SVG image to PDF:", e);
+             // Fallback: draw a simple square if logo addImage fails
+            pdf.setFillColor(135, 206, 235); // Sky Blue
+            pdf.rect(headerSideMarginMm, headerTopMarginMm, logoPdfWidthMm, logoPdfHeightMm, 'F');
           }
-          pageNumber++;
-
-          const currentPageWidth = pdf.internal.pageSize.getWidth(); 
-          const currentPageHeight = pdf.internal.pageSize.getHeight(); 
-
-          // ---- START PDF HEADER (Top Left) ----
-          const headerSideMargin = 10; // mm from left edge for text
-          const headerTopMargin = 10;  // mm from top edge for text
-          const textSpacingMm = 1.5;   // mm space between logo and app name
-
-          const logoChar = "✈"; // Unicode plane icon
-          const appNameText = "WanderAI";
-          const taglineText = "Your Personal AI Travel Planner";
-
-          const appNameFontSizePt = 14;
-          const taglineFontSizePt = 7;
-          const logoFontSizePt = 14; 
-
-          // Calculate Y baselines
-          // Using Math.max for baseline if logo and app name have different font sizes.
-          const logoAppBaselineY_mm = headerTopMargin + ptToMm(Math.max(logoFontSizePt, appNameFontSizePt) * 0.75);
-          const taglineBaselineY_mm = logoAppBaselineY_mm + ptToMm(taglineFontSizePt) + ptToMm(1); // 1mm gap below app name's visual line
-
-          // 1. Draw Logo
-          pdf.setFont("Helvetica", "normal"); 
-          pdf.setFontSize(logoFontSizePt);
-          pdf.setTextColor(135, 206, 235); // Sky Blue
-          const logoX_mm = headerSideMargin;
-          pdf.text(logoChar, logoX_mm, logoAppBaselineY_mm);
-          const logoCharWidthMm = pdf.getStringUnitWidth(logoChar) * logoFontSizePt / pdf.internal.scaleFactor;
-
-          // 2. Draw App Name
-          pdf.setFont("Helvetica", "bold");
-          pdf.setFontSize(appNameFontSizePt);
-          pdf.setTextColor(135, 206, 235); // Sky Blue
-          const appNameX_mm = logoX_mm + logoCharWidthMm + textSpacingMm;
-          pdf.text(appNameText, appNameX_mm, logoAppBaselineY_mm);
-
-          // 3. Draw Tagline
-          pdf.setFont("Helvetica", "normal");
-          pdf.setFontSize(taglineFontSizePt);
-          pdf.setTextColor(105, 105, 105); // Dim Gray (or your secondary text color)
-          const taglineX_mm = appNameX_mm; // Align with App Name
-          pdf.text(taglineText, taglineX_mm, taglineBaselineY_mm);
-          
-          // Determine bottom of header to calculate where content starts
-          const headerBottomY_mm = taglineBaselineY_mm + ptToMm(taglineFontSizePt * 0.25); // Approx bottom of tagline text
-          const contentStartY_onPage = headerBottomY_mm + 5; // 5mm gap below header
-          // ---- END PDF HEADER ----
-
-          pdf.setTextColor(0, 0, 0); // Reset text color for main content if any native text was to follow.
-
-          const pageRenderableHeight_for_image = currentPageHeight - contentStartY_onPage - contentPageMargin; 
-
-          const scrollAmount_pdf_units = (currentImagePartY_src_pixels / imgProps.height) * totalImageStripHeight_pdf_units;
-          const y_offset_for_image_strip = contentStartY_onPage - scrollAmount_pdf_units;
-
-          pdf.addImage(imgData, 'PNG',
-            contentPageMargin, 
-            y_offset_for_image_strip,
-            imageStripWidth_onPage,
-            totalImageStripHeight_pdf_units
-          );
-          
-          if (totalImageStripHeight_pdf_units > 0) {
-            currentImagePartY_src_pixels += (pageRenderableHeight_for_image / totalImageStripHeight_pdf_units) * imgProps.height;
-          } else {
-            currentImagePartY_src_pixels = imgProps.height; 
-          }
-
-          if (pageNumber > 50) { 
-            toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
-            break;
-          }
+        } else {
+           // Fallback: draw a simple square if no svgDataUrl
+          pdf.setFillColor(135, 206, 235); // Sky Blue
+          pdf.rect(headerSideMarginMm, headerTopMarginMm, logoPdfWidthMm, logoPdfHeightMm, 'F');
         }
 
-        pdf.save('wanderai-itinerary.pdf');
-        toast({ title: "Export Successful", description: "Your itinerary has been downloaded as a PDF.", className: "bg-primary text-primary-foreground" });
-      } catch (err) {
-        console.error("Error exporting PDF:", err);
-        toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF.", variant: "destructive"});
-      } finally {
-        setIsExportingPdf(false);
+
+        // 2. Draw App Name
+        pdf.setFont("Helvetica", "bold");
+        pdf.setFontSize(appNameFontSizePt);
+        pdf.setTextColor(135, 206, 235); // Sky Blue
+        const appNameXMm = headerSideMarginMm + logoPdfWidthMm + textSpacingMm;
+        pdf.text(appNameText, appNameXMm, appNameBaselineYMm);
+
+        // 3. Draw Tagline
+        pdf.setFont("Helvetica", "normal");
+        pdf.setFontSize(taglineFontSizePt);
+        pdf.setTextColor(105, 105, 105); // Dim Gray
+        const taglineXMm = appNameXMm;
+        pdf.text(taglineText, taglineXMm, taglineBaselineYMm);
+        // --- END PDF HEADER ---
+
+        pdf.setTextColor(0, 0, 0); // Reset text color for main content
+
+        const pageRenderableHeightForImageMm = currentPageHeightMm - contentStartYOnPageMm - pageMarginMm;
+        const scrollAmountPdfUnits = (currentImagePartYSrcPixels / mainImgProps.height) * totalImageStripHeightPdfUnits;
+        const yOffsetForImageStripMm = contentStartYOnPageMm - scrollAmountPdfUnits;
+
+        pdf.addImage(mainImgData, 'PNG',
+          pageMarginMm,
+          yOffsetForImageStripMm,
+          imageStripWidthOnPageMm,
+          totalImageStripHeightPdfUnits
+        );
+
+        if (totalImageStripHeightPdfUnits > 0) {
+          currentImagePartYSrcPixels += (pageRenderableHeightForImageMm / totalImageStripHeightPdfUnits) * mainImgProps.height;
+        } else {
+          currentImagePartYSrcPixels = mainImgProps.height; // Should not happen if imgProps.height > 0
+        }
+
+        if (pageNumber > 50) {
+          toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
+          break;
+        }
       }
-    }, 300); 
+
+      pdf.save('wanderai-itinerary.pdf');
+      toast({ title: "Export Successful", description: "Your itinerary has been downloaded as a PDF.", className: "bg-primary text-primary-foreground" });
+    } catch (err) {
+      console.error("Error exporting PDF:", err);
+      toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF.", variant: "destructive"});
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
 
