@@ -3,7 +3,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react"; // Removed useCallback as it's not used
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { RefineItineraryInputSchema, type RefineItineraryInput as RefineFormInputType } from "@/lib/schemas";
 import { refineItinerary, type RefineItineraryInput } from "@/ai/flows/refine-itinerary";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download, FileText, AlertTriangle } from "lucide-react";
+import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download, FileText, AlertTriangle, Settings2 } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { format } from 'date-fns';
@@ -300,7 +300,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     }
   };
   
-  const handleExportPdf = async () => {
+ const handleExportPdf = async () => {
     if (!itinerary) {
       toast({ title: "Error", description: "No itinerary content to export.", variant: "destructive" });
       return;
@@ -313,8 +313,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     // PDF Layout Constants
     const PDF_PAGE_WIDTH_MM = 210;
     const PDF_PAGE_HEIGHT_MM = 297;
-    const PAGE_MARGIN_MM = 15;
-
+    const PAGE_MARGIN_MM = 15; 
     const HEADER_HEIGHT_MM = 20;
     const FOOTER_HEIGHT_MM = 15;
 
@@ -322,36 +321,41 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_HEIGHT_MM; // 35mm
     const MAX_Y_BEFORE_FOOTER_MM = PDF_PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM; // 267mm
 
-    // Font Sizes (Points)
-    const FONT_SIZE_MAIN_TITLE = 18;
-    const FONT_SIZE_SUB_HEADING = 14;
-    const FONT_SIZE_BODY = 11;
-    const FONT_SIZE_LIST_ITEM = 11;
+    // Font Sizes (Points) & Styles
+    const FONT_SIZE_MAIN_TITLE = 18; 
+    const FONT_SIZE_SUB_HEADING = 14; 
+    const FONT_SIZE_BODY = 11; 
+    const FONT_SIZE_LIST_ITEM = 11; 
     const FONT_SIZE_FOOTER_TEXT = 9;
     const FONT_SIZE_HEADER_TAGLINE = 9;
     const FONT_SIZE_HEADER_TITLE = 16;
+
+    const FONT_STYLE_NORMAL = "Helvetica"; 
+    const FONT_STYLE_BOLD = "Helvetica-Bold"; 
 
     // Colors (RGB)
     const PDF_COLOR_PRIMARY_HEADING = [45, 105, 185]; 
     const PDF_COLOR_SECONDARY_HEADING = [70, 130, 180]; 
     const PDF_COLOR_TEXT_DEFAULT = [51, 51, 51]; 
-    const PDF_COLOR_MUTED_TEXT = [102, 102, 102];
+    const PDF_COLOR_MUTED_TEXT = [102, 102, 102]; 
     const PDF_COLOR_LINE = [180, 180, 180]; 
 
     // Spacing
-    const LINE_SPACING_FACTOR_BODY = 1.3;
-    const LIST_ITEM_BULLET_INDENT_MM = 5;
-    const LIST_ITEM_TEXT_START_X_MM = PAGE_MARGIN_MM + LIST_ITEM_BULLET_INDENT_MM;
+    const LINE_SPACING_FACTOR_BODY = 1.3; 
+    const LINE_SPACING_FACTOR_LIST = 1.2; 
     
-    const SPACE_AFTER_MAIN_TITLE_MM = 5;
-    const SPACE_AFTER_SUB_HEADING_MM = 3;
-    const SPACE_AFTER_PARAGRAPH_MM = 2;
-    const SPACE_AFTER_LIST_ITEM_MM = 1.5; // Space after an individual list item line
+    const SPACE_BEFORE_MAIN_TITLE_MM = 8; 
+    const SPACE_AFTER_MAIN_TITLE_MM = 4;
+    const SPACE_BEFORE_SUB_HEADING_MM = 5;
+    const SPACE_AFTER_SUB_HEADING_MM = 2.5;
+    const SPACE_AFTER_PARAGRAPH_MM = 2.5; // Adjusted
+    const SPACE_AFTER_LIST_ITEM_MM = 1.5; 
     const EMPTY_LINE_SPACING_MM = 3; 
-    const SEPARATOR_LINE_Y_OFFSET_FROM_TEXT_MM = 2; // Space between separator and text above/below
-    const SPACE_BEFORE_NEW_SECTION_TITLE_MM = 7; // e.g. before "Day X" if not first element
+    const SEPARATOR_LINE_Y_OFFSET_FROM_TEXT_MM = 2;
+    // const SPACE_BEFORE_PARAGRAPH_MM = 2; // Defined later to fix error
+    const SPACE_BEFORE_PARAGRAPH_MM = 2;
 
-    // Capture SVG Logo
+
     const tempSvgContainer = document.createElement('div');
     tempSvgContainer.id = 'temp-svg-container-for-pdf-export';
     tempSvgContainer.style.position = 'absolute';
@@ -364,7 +368,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     tempSvgContainer.innerHTML = svgLogoString;
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay for SVG rendering
+      await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay
       const svgCanvas = await html2canvas(tempSvgContainer, {
         scale: 3, backgroundColor: null, useCORS: true, width: 64, height: 64, logging: false,
       });
@@ -377,12 +381,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       }
     }
     
-    const pageRef = { current: 1 };
     const yRef = { current: CONTENT_START_Y_MM };
-    const totalPagesRef = { value: 1 }; // Will be updated at the end
-    const pageCreationTimestamps = [Date.now()]; // For footer
+    const currentPageNumRef = { current: 1 };
+    const totalPagesPlaceholder = "{totalPages}"; 
 
-    const drawPageHeaderAndFooter = (pdfInstance: jsPDF, pageNum: number, totalPages: string | number, logoUrl: string | null, creationTimestamp: number) => {
+    const drawPageHeaderAndFooter = (pdfInstance: jsPDF, pageNum: number, totalPages: string | number, logoUrl: string | null) => {
       // Header
       const logoX = PAGE_MARGIN_MM;
       const logoY = PAGE_MARGIN_MM;
@@ -394,13 +397,13 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         try { pdfInstance.addImage(logoUrl, 'PNG', logoX, logoY, logoWidthMm, logoHeightMm); }
         catch (imgError) { console.error("Error adding SVG logo to PDF:", imgError); }
       } else {
-         pdfInstance.setFont("Helvetica", "bold").setFontSize(12).setTextColor(PDF_COLOR_PRIMARY_HEADING[0], PDF_COLOR_PRIMARY_HEADING[1], PDF_COLOR_PRIMARY_HEADING[2]).text("WAI", logoX, logoY + logoHeightMm / 2 + 1);
+         pdfInstance.setFont(FONT_STYLE_BOLD).setFontSize(12).setTextColor(PDF_COLOR_PRIMARY_HEADING[0], PDF_COLOR_PRIMARY_HEADING[1], PDF_COLOR_PRIMARY_HEADING[2]).text("WAI", logoX, logoY + logoHeightMm / 2 + 1);
       }
       
       const textStartX = logoX + logoWidthMm + headerTextSpacingMm;
-      pdfInstance.setFont("Helvetica", "bold").setFontSize(FONT_SIZE_HEADER_TITLE).setTextColor(PDF_COLOR_PRIMARY_HEADING[0], PDF_COLOR_PRIMARY_HEADING[1], PDF_COLOR_PRIMARY_HEADING[2]);
+      pdfInstance.setFont(FONT_STYLE_BOLD).setFontSize(FONT_SIZE_HEADER_TITLE).setTextColor(PDF_COLOR_PRIMARY_HEADING[0], PDF_COLOR_PRIMARY_HEADING[1], PDF_COLOR_PRIMARY_HEADING[2]);
       pdfInstance.text("WanderAI", textStartX, logoY + (logoHeightMm/2) );
-      pdfInstance.setFont("Helvetica", "normal").setFontSize(FONT_SIZE_HEADER_TAGLINE).setTextColor(PDF_COLOR_MUTED_TEXT[0], PDF_COLOR_MUTED_TEXT[1], PDF_COLOR_MUTED_TEXT[2]);
+      pdfInstance.setFont(FONT_STYLE_NORMAL).setFontSize(FONT_SIZE_HEADER_TAGLINE).setTextColor(PDF_COLOR_MUTED_TEXT[0], PDF_COLOR_MUTED_TEXT[1], PDF_COLOR_MUTED_TEXT[2]);
       pdfInstance.text("Your Personal AI Travel Planner", textStartX, logoY + (logoHeightMm/2) + 5);
 
       // Footer
@@ -408,7 +411,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       pdfInstance.setDrawColor(PDF_COLOR_LINE[0], PDF_COLOR_LINE[1], PDF_COLOR_LINE[2]);
       pdfInstance.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM, footerLineY);
 
-      pdfInstance.setFont("Helvetica", "normal").setFontSize(FONT_SIZE_FOOTER_TEXT).setTextColor(PDF_COLOR_MUTED_TEXT[0], PDF_COLOR_MUTED_TEXT[1], PDF_COLOR_MUTED_TEXT[2]);
+      pdfInstance.setFont(FONT_STYLE_NORMAL).setFontSize(FONT_SIZE_FOOTER_TEXT).setTextColor(PDF_COLOR_MUTED_TEXT[0], PDF_COLOR_MUTED_TEXT[1], PDF_COLOR_MUTED_TEXT[2]);
       const footerTextY = footerLineY + 5;
       pdfInstance.text("WanderAI", PAGE_MARGIN_MM, footerTextY);
 
@@ -416,7 +419,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const pageNumTextWidth = pdfInstance.getStringUnitWidth(pageNumText) * FONT_SIZE_FOOTER_TEXT / pdfInstance.internal.scaleFactor;
       pdfInstance.text(pageNumText, (PDF_PAGE_WIDTH_MM / 2) - (pageNumTextWidth / 2), footerTextY);
 
-      const generationTimestampStr = format(new Date(creationTimestamp), "MMM d, yyyy, h:mm a");
+      const generationTimestampStr = format(new Date(), "MMM d, yyyy, h:mm a");
       const dateTextWidth = pdfInstance.getStringUnitWidth(generationTimestampStr) * FONT_SIZE_FOOTER_TEXT / pdfInstance.internal.scaleFactor;
       pdfInstance.text(generationTimestampStr, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM - dateTextWidth, footerTextY);
     };
@@ -424,9 +427,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     const checkAndAddNewPageIfNeeded = (neededHeight: number) => {
         if (yRef.current + neededHeight > MAX_Y_BEFORE_FOOTER_MM) {
             pdf.addPage();
-            pageRef.current++;
-            pageCreationTimestamps[pageRef.current -1] = Date.now();
-            drawPageHeaderAndFooter(pdf, pageRef.current, "{totalPages}", svgDataUrl, pageCreationTimestamps[pageRef.current - 1]);
+            currentPageNumRef.current++;
+            drawPageHeaderAndFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder, svgDataUrl);
             yRef.current = CONTENT_START_Y_MM;
             return true;
         }
@@ -438,8 +440,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         x: number,
         style: {
             fontSize: number;
-            fontName?: 'Helvetica' | 'Times-Roman' | 'Courier';
-            fontStyle?: 'normal' | 'bold' | 'italic' | 'bolditalic';
+            fontName?: typeof FONT_STYLE_NORMAL | typeof FONT_STYLE_BOLD;
             color?: number[];
             maxWidth?: number;
             lineSpacingFactor?: number;
@@ -449,46 +450,44 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     ) => {
         const {
             fontSize,
-            fontName = 'Helvetica',
-            fontStyle = 'normal',
+            fontName = FONT_STYLE_NORMAL,
             color = PDF_COLOR_TEXT_DEFAULT,
             maxWidth = MAX_CONTENT_WIDTH_MM,
             lineSpacingFactor = LINE_SPACING_FACTOR_BODY,
             isListItem = false,
             bulletChar = "•",
         } = style;
-
-        pdf.setFont(fontName, fontStyle).setFontSize(fontSize).setTextColor(color[0], color[1], color[2]);
         
         const effectiveLineHeight = fontSize * lineSpacingFactor / pdf.internal.scaleFactor;
         let textToProcess = text;
         
-        if (isListItem) { // Handle bullet point separately if it's a list item
-            checkAndAddNewPageIfNeeded(effectiveLineHeight);
-            pdf.setFont("Helvetica", "normal").setFontSize(fontSize).setTextColor(color[0], color[1], color[2]);
-            pdf.text(bulletChar, PAGE_MARGIN_MM, yRef.current);
-            x = LIST_ITEM_TEXT_START_X_MM; // Indent text for list item
-        }
-        
-        const lines = pdf.splitTextToSize(textToProcess, isListItem ? maxWidth - LIST_ITEM_BULLET_INDENT_MM : maxWidth);
+        const lines = pdf.splitTextToSize(textToProcess, isListItem ? maxWidth - (isListItem ? 5 : 0) : maxWidth); // Indent list item text further
 
-        lines.forEach((line: string, index: number) => {
-            if (index > 0 || !isListItem) { // For subsequent lines of a list item, or normal lines, check page break
-                 checkAndAddNewPageIfNeeded(effectiveLineHeight);
+        lines.forEach((line: string, lineIndex: number) => {
+            checkAndAddNewPageIfNeeded(effectiveLineHeight); 
+
+            let currentX = x;
+            if (isListItem && lineIndex === 0) { // Draw bullet only for the first line of a list item
+                pdf.setFont(FONT_STYLE_NORMAL).setFontSize(fontSize).setTextColor(color[0], color[1], color[2]);
+                pdf.text(bulletChar, PAGE_MARGIN_MM, yRef.current);
+                currentX = PAGE_MARGIN_MM + 5; // Indent list item text
+            } else if (isListItem) {
+                currentX = PAGE_MARGIN_MM + 5; // Ensure subsequent lines of list item are also indented
             }
+
 
             const boldRegex = /(\*\*.*?\*\*)/g;
             const parts = line.split(boldRegex);
-            let currentX = x;
+            
 
             parts.forEach(part => {
                 if (part.startsWith('**') && part.endsWith('**')) {
                     const boldText = part.slice(2, -2);
-                    pdf.setFont(fontName, 'bold', fontSize).setFontSize(fontSize).setTextColor(color[0], color[1], color[2]);
+                    pdf.setFont(FONT_STYLE_BOLD, "normal").setFontSize(fontSize).setTextColor(color[0], color[1], color[2]); 
                     pdf.text(boldText, currentX, yRef.current);
                     currentX += pdf.getStringUnitWidth(boldText) * fontSize / pdf.internal.scaleFactor;
                 } else {
-                    pdf.setFont(fontName, fontStyle, fontSize).setFontSize(fontSize).setTextColor(color[0], color[1], color[2]);
+                    pdf.setFont(fontName, "normal").setFontSize(fontSize).setTextColor(color[0], color[1], color[2]); 
                     pdf.text(part, currentX, yRef.current);
                     currentX += pdf.getStringUnitWidth(part) * fontSize / pdf.internal.scaleFactor;
                 }
@@ -497,14 +496,14 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         });
     };
 
-    drawPageHeaderAndFooter(pdf, pageRef.current, "{totalPages}", svgDataUrl, pageCreationTimestamps[pageRef.current - 1]);
+    drawPageHeaderAndFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder, svgDataUrl);
     
     const itineraryLines = itinerary.split('\n');
     let isPreviousLineBlank = false;
     let isFirstContentElement = true;
 
     const mainSectionTitleRegex = /^(Introduction|Overview|Day\s+\d+.*?):?$/i;
-    const subHeadingRegex = /^\s*(Activities|Attractions|Food(?: Recommendations)?|Hotel(?: Suggestions)?|Accommodation|Local Tips|Tips(?: & Advice)?|Transportation)\s*:?\s*(.*)/i; // Emojis removed from regex for PDF
+    const subHeadingRegex = /^\s*(Activities|Attractions|Food(?: Recommendations)?|Hotel(?: Suggestions)?|Accommodation|Local Tips|Tips(?: & Advice)?|Transportation)\s*:?\s*(.*)/i;
     const listItemRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s*(.*)/;
 
 
@@ -513,43 +512,31 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         const trimmedLine = line.trim();
 
         if (trimmedLine === "") {
-            if (!isPreviousLineBlank) {
+            if (!isPreviousLineBlank) { // Only add space for the first blank line in a sequence
                 checkAndAddNewPageIfNeeded(EMPTY_LINE_SPACING_MM);
                 yRef.current += EMPTY_LINE_SPACING_MM;
                 isPreviousLineBlank = true;
             }
             continue; 
         }
-        isPreviousLineBlank = false;
+        isPreviousLineBlank = false; // Reset for non-blank lines
 
         const mainTitleMatch = trimmedLine.match(mainSectionTitleRegex);
         if (mainTitleMatch) {
             const titleText = mainTitleMatch[1].trim();
-            const isNewMajorSection = /^(Overview|Day\s+\d+)/i.test(titleText);
-
-            if (!isFirstContentElement && isNewMajorSection) { // Check if we should start Day/Overview on a new page
-                 if (yRef.current > CONTENT_START_Y_MM + (FONT_SIZE_MAIN_TITLE / pdf.internal.scaleFactor) * 3 ) { // If significant content already on page
-                    checkAndAddNewPageIfNeeded(PDF_PAGE_HEIGHT_MM); // Force new page
-                 } else {
-                    checkAndAddNewPageIfNeeded(SPACE_BEFORE_NEW_SECTION_TITLE_MM);
-                    yRef.current += SPACE_BEFORE_NEW_SECTION_TITLE_MM;
-                 }
-            } else if (!isFirstContentElement) {
+            
+            if (!isFirstContentElement) {
                  checkAndAddNewPageIfNeeded(SPACE_BEFORE_MAIN_TITLE_MM);
                  yRef.current += SPACE_BEFORE_MAIN_TITLE_MM;
-            }
-            
-            // Separator Line above Main Title (except for very first element)
-            if (!isFirstContentElement) {
-                 const separatorY = yRef.current - SEPARATOR_LINE_Y_OFFSET_FROM_TEXT_MM - 2; // Position above text
-                 checkAndAddNewPageIfNeeded(2); // Space for the line itself
+                 const separatorY = yRef.current - SEPARATOR_LINE_Y_OFFSET_FROM_TEXT_MM -1; // Adjusted for better placement
+                 checkAndAddNewPageIfNeeded(1); // For the line itself
                  pdf.setDrawColor(PDF_COLOR_LINE[0], PDF_COLOR_LINE[1], PDF_COLOR_LINE[2]);
                  pdf.line(PAGE_MARGIN_MM, separatorY, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM, separatorY);
-                 // yRef.current is already positioned for the text after this
+                 yRef.current += 1; // Account for line thickness if needed, or adjust SPACE_BEFORE_MAIN_TITLE_MM
             }
 
             renderTextWithStyles(titleText, PAGE_MARGIN_MM, {
-                fontSize: FONT_SIZE_MAIN_TITLE, fontStyle: "bold", color: PDF_COLOR_PRIMARY_HEADING
+                fontSize: FONT_SIZE_MAIN_TITLE, fontName: FONT_STYLE_BOLD, color: PDF_COLOR_PRIMARY_HEADING
             });
             checkAndAddNewPageIfNeeded(SPACE_AFTER_MAIN_TITLE_MM);
             yRef.current += SPACE_AFTER_MAIN_TITLE_MM;
@@ -562,29 +549,41 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 yRef.current += SPACE_BEFORE_SUB_HEADING_MM;
                 
                 let subText = subHeadingMatch[1].trim();
-                if (subHeadingMatch[2] && subHeadingMatch[2].trim() !== "") {
-                    subText += ": " + subHeadingMatch[2].trim();
-                } else {
-                    subText += ":";
-                }
+                // Omit emoji for PDF
+                const emojiRegex = /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g;
+                subText = subText.replace(emojiRegex, '').trim();
 
-                renderTextWithStyles(subText, PAGE_MARGIN_MM, {
-                    fontSize: FONT_SIZE_SUB_HEADING, fontStyle: "bold", color: PDF_COLOR_SECONDARY_HEADING
-                });
-                checkAndAddNewPageIfNeeded(SPACE_AFTER_SUB_HEADING_MM);
+                if (subHeadingMatch[2] && subHeadingMatch[2].trim() !== "") {
+                     // The rest of the line becomes part of the subheading or treated as content after it
+                     subText += ":"; // Add colon if not present
+                     renderTextWithStyles(subText, PAGE_MARGIN_MM, {
+                         fontSize: FONT_SIZE_SUB_HEADING, fontName: FONT_STYLE_BOLD, color: PDF_COLOR_SECONDARY_HEADING
+                     });
+                     const remainingContent = subHeadingMatch[2].trim();
+                     if (remainingContent) {
+                         // Render remaining content as a normal paragraph after the subheading
+                         yRef.current += SPACE_AFTER_SUB_HEADING_MM; // Space between subheading and its content
+                         renderTextWithStyles(remainingContent, PAGE_MARGIN_MM, {
+                             fontSize: FONT_SIZE_BODY, color: PDF_COLOR_TEXT_DEFAULT, lineSpacingFactor: LINE_SPACING_FACTOR_BODY
+                         });
+                     }
+
+                } else {
+                     renderTextWithStyles(subText + ":", PAGE_MARGIN_MM, {
+                         fontSize: FONT_SIZE_SUB_HEADING, fontName: FONT_STYLE_BOLD, color: PDF_COLOR_SECONDARY_HEADING
+                     });
+                }
+                checkAndAddNewPageIfNeeded(SPACE_AFTER_SUB_HEADING_MM); // This will be space after the block
                 yRef.current += SPACE_AFTER_SUB_HEADING_MM;
                 isFirstContentElement = false;
 
             } else if (listItemRegex.test(trimmedLine)) {
                 const itemText = (trimmedLine.match(listItemRegex)?.[1] || "").trim();
                 if (itemText) {
-                    // No extra space before list item, managed by renderTextWithStyles internal line spacing
-                    renderTextWithStyles(itemText, PAGE_MARGIN_MM, { // X will be adjusted by isListItem logic
-                        fontSize: FONT_SIZE_LIST_ITEM, isListItem: true, color: PDF_COLOR_TEXT_DEFAULT, lineSpacingFactor: LINE_SPACING_FACTOR_BODY
+                    renderTextWithStyles(itemText, PAGE_MARGIN_MM, {
+                        fontSize: FONT_SIZE_LIST_ITEM, isListItem: true, color: PDF_COLOR_TEXT_DEFAULT, lineSpacingFactor: LINE_SPACING_FACTOR_LIST
                     });
-                     // Add space *after* the entire list item (which might span multiple lines)
-                    checkAndAddNewPageIfNeeded(SPACE_AFTER_LIST_ITEM_MM);
-                    yRef.current += SPACE_AFTER_LIST_ITEM_MM;
+                    // No explicit yRef.current += SPACE_AFTER_LIST_ITEM_MM here as renderTextWithStyles updates yRef
                 }
                 isFirstContentElement = false;
             } else { 
@@ -600,16 +599,15 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         }
     }
     
-    totalPagesRef.value = pageRef.current;
-
-    for (let i = 1; i <= totalPagesRef.value; i++) {
-      pdf.setPage(i);
-      drawPageHeaderAndFooter(pdf, i, totalPagesRef.value.toString(), svgDataUrl, pageCreationTimestamps[i-1]);
+    const totalPages = currentPageNumRef.current;
+    for (let pageIdx = 1; pageIdx <= totalPages; pageIdx++) {
+      pdf.setPage(pageIdx);
+      drawPageHeaderAndFooter(pdf, pageIdx, totalPages.toString(), svgDataUrl);
     }
 
     try {
       pdf.save('wanderai-itinerary.pdf');
-      toast({ title: "Export Successful", description: `Your itinerary (${totalPagesRef.value} page(s)) has been downloaded.`, className: "bg-primary text-primary-foreground" });
+      toast({ title: "Export Successful", description: `Your itinerary (${totalPages} page(s)) has been downloaded.`, className: "bg-primary text-primary-foreground" });
     } catch (saveErr) {
       console.error("Error saving PDF:", saveErr);
       toast({ title: "PDF Save Error", description: "Could not save the PDF.", variant: "destructive" });
@@ -756,3 +754,4 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
+
