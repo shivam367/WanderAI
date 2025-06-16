@@ -122,24 +122,23 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     defaultValues: { userFeedback: "" },
   });
 
-  // Helper to process a line for bold text and return an array of React nodes
   const processLineForBold = (line: string, keyPrefix: string): React.ReactNode[] => {
-    const parts = line.split(/(\*\*.*?\*\*)/g); // Split by bold markers, keeping them
-    return parts.filter(part => part.length > 0) // Remove empty strings from split
+    const parts = line.split(/(\*\*.*?\*\*)/g); 
+    return parts.filter(part => part.length > 0) 
       .map((part, idx) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          // If it's a bold part, remove the asterisks and wrap in <strong> 
           return <strong key={`${keyPrefix}-bold-${idx}`}>{part.slice(2, -2)}</strong>;
         }
-        // Otherwise, return the text part as is
         return part;
       });
   };
   
   const renderContent = (contentLines: string[]): JSX.Element[] => {
     const elements: JSX.Element[] = [];
-    let currentListItemGroup: React.ReactNode[][] = []; // Stores React.ReactNode[] for each <li>
-
+    let currentListItemGroup: React.ReactNode[][] = []; 
+  
+    const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s*(.*)/; 
+  
     const flushList = () => {
       if (currentListItemGroup.length > 0) {
         elements.push(
@@ -152,34 +151,62 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         currentListItemGroup = [];
       }
     };
-
-    contentLines.forEach((line, lineIdx) => {
-      const trimmedLine = line.trim();
-      // Regex to identify list markers (-, *, •, or number./number)) and capture content AFTER the marker
-      const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s+(.*)/;
-      const listMatch = trimmedLine.match(listRegex);
-
-      if (listMatch) {
-        const listItemText = listMatch[1].trim(); // Get the actual text content of the list item
-        if (listItemText) { // Only add if there's actual content for the list item
-          currentListItemGroup.push(processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`));
+  
+    contentLines.forEach((originalLine, lineIdx) => {
+      let lineContentForProcessing = originalLine.trim();
+      let isEntireLineBoldedForList = false;
+  
+      let listMatch = lineContentForProcessing.match(listRegex);
+  
+      if (!listMatch && lineContentForProcessing.startsWith('**') && lineContentForProcessing.endsWith('**')) {
+        const unboldedLine = lineContentForProcessing.slice(2, -2).trim();
+        const potentialMatch = unboldedLine.match(listRegex);
+        if (potentialMatch) {
+          listMatch = potentialMatch;
+          lineContentForProcessing = listMatch[1].trim(); // This is the text part of the list item
+          isEntireLineBoldedForList = true;
+        } else {
+          // Line was bold but not a list item after unbolding, treat as bold paragraph.
+          // lineContentForProcessing remains originalLine.trim() for paragraph processing.
         }
-      } else {
-        flushList(); // Not a list item, so finalize any pending list
-        if (trimmedLine) { // If the line is not empty after trimming, treat it as a paragraph
+      } else if (listMatch) {
+        lineContentForProcessing = listMatch[1].trim(); // Text part of the list item
+      }
+  
+      if (listMatch) { // It's a list item (either originally or after unbolding)
+        const listItemText = lineContentForProcessing;
+  
+        if (listItemText || isEntireLineBoldedForList) { 
+          let processedItemNodes = processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`);
+          
+          if (isEntireLineBoldedForList) {
+            processedItemNodes = [ // Wrap the processed nodes in a strong tag
+              <strong key={`bold-wrapper-${lineIdx}`}>{processedItemNodes}</strong>
+            ];
+          }
+          currentListItemGroup.push(processedItemNodes);
+        }
+      } else { // It's a paragraph
+        flushList(); 
+        if (originalLine.trim()) { 
           elements.push(
             <p key={`p-${elements.length}-line-${lineIdx}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
-              {processLineForBold(trimmedLine, `p-content-${elements.length}-line-${lineIdx}`)}
+              {processLineForBold(originalLine.trim(), `p-content-${elements.length}-line-${lineIdx}`)}
             </p>
           );
         }
       }
     });
-
-    flushList(); // Ensure any trailing list items are rendered after the loop
-
+  
+    flushList(); 
+  
+    if (elements.length === 0 && contentLines.some(l => l.trim() !== '')) {
+        // Fallback: If there was non-empty content but parsing yielded nothing (e.g. only empty list markers)
+        // This could render raw lines or a more specific message.
+        // For now, if elements is empty, the later check handles it.
+    }
+    
     if (elements.length === 0) {
-        // This covers cases where contentLines was empty or contained only whitespace or empty list items.
         return [<p key="no-details-provided" className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
     }
     return elements;
@@ -224,7 +251,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const canvas = await html2canvas(itineraryContentRef.current, { 
         scale: 2, 
         useCORS: true, 
-        backgroundColor: '#ffffff', // Explicitly set background to white for PDF
+        backgroundColor: '#ffffff', 
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -241,7 +268,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
-        position = heightLeft - pdfHeight + pdfMargin; // Adjust position for subsequent pages
+        position = heightLeft - pdfHeight + pdfMargin; 
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pdfMargin, position, pdfWidth, pdfHeight);
         heightLeft -= pageHeight;
@@ -329,9 +356,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
 
-        {/* This div is what gets captured for PDF export */}
         <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
-          <ScrollArea className="h-[600px] p-1"> {/* Applied p-1 to scroll area if needed, or p-4 to its content */}
+          <ScrollArea className="h-[600px] p-1"> 
             {otherSections.map((section, idx) => (
               <div key={`other-${idx}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                 <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -361,7 +387,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 ))}
               </Accordion>
             )}
-            {/* Fallback for when there's itinerary text but it wasn't parsed into day/other sections */}
             {daySections.length === 0 && otherSections.length === 0 && itinerary && itinerary.trim() !== "" && (
                  <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
                     <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -377,6 +402,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
+    
+
     
 
     
