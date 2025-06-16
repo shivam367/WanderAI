@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 
 export default function ProfilePage() {
   const { toast } = useToast();
-  const { currentUser, updateProfile, logout, changePassword, isLoading: authLoading, fetchCurrentUser } = useAuth();
+  const { currentUser, updateProfile, logout, changePassword, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [isUpdatingProfile, setIsUpdatingProfile] = React.useState(false);
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
@@ -30,7 +30,7 @@ export default function ProfilePage() {
   const profileForm = useForm<ProfileEditInput>({
     resolver: zodResolver(ProfileEditSchema),
     defaultValues: {
-      name: currentUser?.name || "",
+      name: "", // Initialize with empty string, will be set by useEffect
     },
   });
 
@@ -46,10 +46,10 @@ export default function ProfilePage() {
   useEffect(() => {
     if (currentUser) {
       profileForm.reset({ name: currentUser.name });
-    } else {
-      fetchCurrentUser();
     }
-  }, [currentUser, profileForm, fetchCurrentUser]);
+    // No 'else' block or fetchCurrentUser needed here.
+    // AuthContext handles initial fetch. ProtectedRoute handles redirection if no user.
+  }, [currentUser, profileForm]);
 
 
   const onProfileSubmit: SubmitHandler<ProfileEditInput> = async (data) => {
@@ -77,6 +77,8 @@ export default function ProfilePage() {
     }
   };
 
+  // This spinner shows while AuthContext is initially loading the user.
+  // ProtectedRoute also shows a spinner and handles redirection if needed.
   if (authLoading && !currentUser) {
     return (
       <div className="flex flex-col min-h-screen bg-background items-center justify-center">
@@ -85,14 +87,9 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser && !authLoading) {
-     router.push('/auth');
-     return (
-      <div className="flex flex-col min-h-screen bg-background items-center justify-center">
-        <LoadingSpinner size={48} text="Redirecting..." />
-      </div>
-    );
-  }
+  // If ProtectedRoute allows rendering, currentUser should exist.
+  // The direct router.push call that caused the error has been removed from here.
+  // ProtectedRoute will handle redirection if !currentUser after authLoading is false.
 
 
   return (
@@ -106,7 +103,7 @@ export default function ProfilePage() {
               <CardDescription className="font-body">View and update your account details.</CardDescription>
             </CardHeader>
             <CardContent>
-              {currentUser ? (
+              {currentUser ? ( // currentUser should be available here due to ProtectedRoute
                 <Form {...profileForm}>
                   <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
                     <FormField
@@ -135,7 +132,9 @@ export default function ProfilePage() {
                   </form>
                 </Form>
               ) : (
-                <p>Loading user data...</p>
+                 // This state should ideally not be reached if ProtectedRoute works correctly.
+                 // If it is, ProtectedRoute's spinner should be showing or redirecting.
+                <LoadingSpinner size={32} text="Verifying user..." />
               )}
             </CardContent>
           </Card>
