@@ -300,6 +300,60 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     }
   };
 
+  const drawPageHeaderAndFooter = (
+    pdf: jsPDF,
+    pageNum: number,
+    logoDataUrl: string | null,
+    pageWidth: number,
+    margin: number,
+    headerHeight: number,
+    footerHeight: number
+  ) => {
+    // Header
+    const logoX = margin;
+    const logoY = margin;
+    const logoHeightMm = 10;
+    const logoWidthMm = 10;
+    const headerTextSpacingMm = 2;
+
+    if (logoDataUrl) {
+      try {
+        pdf.addImage(logoDataUrl, 'PNG', logoX, logoY, logoWidthMm, logoHeightMm);
+      } catch (imgError) {
+        console.error("Error adding SVG logo image to PDF page:", imgError);
+        pdf.setFont("Helvetica", "normal").setFontSize(8).setTextColor(128,0,0).text("[Logo Error]", logoX, logoY + logoHeightMm / 2);
+      }
+    } else {
+       pdf.setFont("Helvetica-Bold").setFontSize(10).setTextColor(0,0,0).text("[LOGO]", logoX, logoY + logoHeightMm / 2 + 1);
+    }
+    
+    const textStartX = logoX + logoWidthMm + headerTextSpacingMm;
+    pdf.setFont("Helvetica-Bold").setFontSize(14).setTextColor(Number(PDF_PRIMARY_COLOR_RGB_STRING.split(',')[0]), Number(PDF_PRIMARY_COLOR_RGB_STRING.split(',')[1]), Number(PDF_PRIMARY_COLOR_RGB_STRING.split(',')[2]));
+    pdf.text("WanderAI", textStartX, logoY + (logoHeightMm/2) + 1); 
+    
+    pdf.setFont("Helvetica-Oblique").setFontSize(8).setTextColor(Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[0]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[1]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[2]));
+    pdf.text("Your Personal AI Travel Planner", textStartX, logoY + (logoHeightMm/2) + 1 + 4);
+
+    // Footer
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const footerLineY = pageHeight - footerHeight;
+    pdf.setDrawColor(Number(PDF_LINE_COLOR_RGB_STRING.split(',')[0]), Number(PDF_LINE_COLOR_RGB_STRING.split(',')[1]), Number(PDF_LINE_COLOR_RGB_STRING.split(',')[2]));
+    pdf.line(margin, footerLineY, pageWidth - margin, footerLineY);
+
+    pdf.setFont("Helvetica", "normal").setFontSize(8).setTextColor(Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[0]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[1]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[2]));
+    
+    const pageNumText = `Page ${pageNum}`;
+    const pageNumTextWidth = pdf.getStringUnitWidth(pageNumText) * pdf.getFontSize() / pdf.internal.scaleFactor;
+    pdf.text(pageNumText, pageWidth / 2 - pageNumTextWidth / 2, footerLineY + 5); 
+
+    pdf.text("WanderAI", margin, footerLineY + 5);
+    
+    const generationTimestamp = format(new Date(), "MMM d, yyyy, h:mm a");
+    const dateTextWidth = pdf.getStringUnitWidth(generationTimestamp) * pdf.getFontSize() / pdf.internal.scaleFactor;
+    pdf.text(generationTimestamp, pageWidth - margin - dateTextWidth, footerLineY + 5);
+  };
+
+
   const handleExportPdf = async () => {
     if (!itineraryContentRef.current || !itinerary) {
       toast({ title: "Error", description: "No itinerary content to export.", variant: "destructive" });
@@ -312,34 +366,32 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     const pdfPageHeight = pdf.internal.pageSize.getHeight();
     
     const PAGE_MARGIN_MM = 15;
-    const HEADER_HEIGHT_MM = 20; // Space for logo and title
-    const FOOTER_HEIGHT_MM = 15; // Space for page number and date
+    const HEADER_HEIGHT_MM = 20;
+    const FOOTER_HEIGHT_MM = 15;
     const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_HEIGHT_MM;
-    const MAX_CONTENT_HEIGHT_ON_PAGE_MM = pdfPageHeight - CONTENT_START_Y_MM - FOOTER_HEIGHT_MM - PAGE_MARGIN_MM; // Max height for the captured image segment
+    const MAX_CONTENT_HEIGHT_ON_PAGE_MM = pdfPageHeight - CONTENT_START_Y_MM - FOOTER_HEIGHT_MM - PAGE_MARGIN_MM;
 
-    let svgDataUrl = '';
+    let svgDataUrl: string | null = null;
     const tempSvgContainer = document.createElement('div');
     tempSvgContainer.id = 'temp-svg-container-for-pdf-export';
-    // Style for off-screen rendering
     tempSvgContainer.style.position = 'absolute';
     tempSvgContainer.style.left = '-9999px'; 
     tempSvgContainer.style.top = '-9999px';
-    tempSvgContainer.style.width = '64px'; // Explicit size for capture
+    tempSvgContainer.style.width = '64px'; 
     tempSvgContainer.style.height = '64px';
-    tempSvgContainer.innerHTML = svgLogoString; // The SVG string
+    tempSvgContainer.innerHTML = svgLogoString;
     document.body.appendChild(tempSvgContainer);
 
     try {
-      // Allow the browser a moment to render the SVG in the hidden div
-      await new Promise(resolve => setTimeout(resolve, 100)); 
+      await new Promise(resolve => setTimeout(resolve, 150)); // Increased delay slightly
 
-      const svgCanvas = await html2canvas(tempSvgContainer, { // Capture the container
-        scale: 2, // For better quality
-        backgroundColor: null, // Transparent background
+      const svgCanvas = await html2canvas(tempSvgContainer, { 
+        scale: 2, 
+        backgroundColor: null, 
         useCORS: true,
-        width: 64, // Explicit capture dimensions
+        width: 64, 
         height: 64,
-        logging: false, // set to true for debugging html2canvas
+        logging: false,
       });
       svgDataUrl = svgCanvas.toDataURL('image/png');
     } catch (e) {
@@ -351,79 +403,55 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       }
     }
     
-    const drawPageHeaderAndFooter = (pageNum: number) => {
-      // Header
-      const logoX = PAGE_MARGIN_MM;
-      const logoY = PAGE_MARGIN_MM;
-      const logoHeightMm = 12; // Desired height of the logo in the PDF
-      const logoWidthMm = 12; // Desired width of the logo in the PDF
-      const headerTextSpacingMm = 3; // Spacing between logo and text
-
-      if (svgDataUrl) {
-        try {
-          pdf.addImage(svgDataUrl, 'PNG', logoX, logoY, logoWidthMm, logoHeightMm);
-        } catch (imgError) {
-          console.error("Error adding SVG logo image to PDF page:", imgError);
-          pdf.setFont("Helvetica", "normal").setFontSize(8).setTextColor(128,0,0).text("[Logo Error]", logoX, logoY + logoHeightMm / 2);
-        }
-      } else {
-         pdf.setFont("Helvetica-Bold").setFontSize(10).setTextColor(0,0,0).text("[LOGO]", logoX, logoY + logoHeightMm / 2 + 1);
-      }
-      
-      const textStartX = logoX + logoWidthMm + headerTextSpacingMm;
-      pdf.setFont("Helvetica-Bold").setFontSize(16).setTextColor(Number(PDF_PRIMARY_COLOR_RGB_STRING.split(',')[0]), Number(PDF_PRIMARY_COLOR_RGB_STRING.split(',')[1]), Number(PDF_PRIMARY_COLOR_RGB_STRING.split(',')[2]));
-      pdf.text("WanderAI", textStartX, logoY + (logoHeightMm/2) + 2); // Vertically align with logo center
-      
-      pdf.setFont("Helvetica-Oblique").setFontSize(9).setTextColor(Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[0]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[1]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[2]));
-      pdf.text("Your Personal AI Travel Planner", textStartX, logoY + (logoHeightMm/2) + 2 + 5);
-
-
-      // Footer
-      const footerLineY = pdfPageHeight - FOOTER_HEIGHT_MM;
-      pdf.setDrawColor(Number(PDF_LINE_COLOR_RGB_STRING.split(',')[0]), Number(PDF_LINE_COLOR_RGB_STRING.split(',')[1]), Number(PDF_LINE_COLOR_RGB_STRING.split(',')[2])); // Light gray line
-      pdf.line(PAGE_MARGIN_MM, footerLineY, pdfPageWidth - PAGE_MARGIN_MM, footerLineY);
-
-      pdf.setFont("Helvetica", "normal").setFontSize(9).setTextColor(Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[0]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[1]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[2]));
-      
-      const pageNumText = `Page ${pageNum}`;
-      const pageNumTextWidth = pdf.getStringUnitWidth(pageNumText) * pdf.getFontSize() / pdf.internal.scaleFactor;
-      pdf.text(pageNumText, pdfPageWidth / 2 - pageNumTextWidth / 2, footerLineY + 7); // Centered page number
-
-      pdf.text("WanderAI", PAGE_MARGIN_MM, footerLineY + 7);
-      
-      const generationTimestamp = format(new Date(), "MMMM d, yyyy 'at' h:mm a");
-      const dateTextWidth = pdf.getStringUnitWidth(generationTimestamp) * pdf.getFontSize() / pdf.internal.scaleFactor;
-      pdf.text(generationTimestamp, pdfPageWidth - PAGE_MARGIN_MM - dateTextWidth, footerLineY + 7); // Date on the right
-    };
-    
     const contentToCapture = itineraryContentRef.current;
     const scrollableViewport = scrollAreaViewportRef.current;
 
-    // Temporarily modify styles for full capture
-    const originalContentStyle = { height: contentToCapture.style.height, overflowY: contentToCapture.style.overflowY, paddingBottom: contentToCapture.style.paddingBottom };
-    const originalViewportStyle = scrollableViewport ? { height: scrollableViewport.style.height, overflow: scrollableViewport.style.overflow } : null;
+    const originalContentStyle = {
+      height: contentToCapture.style.height,
+      overflowY: contentToCapture.style.overflowY,
+      paddingBottom: contentToCapture.style.paddingBottom,
+    };
+    const originalViewportStyle = scrollableViewport
+      ? {
+          height: scrollableViewport.style.height,
+          overflow: scrollableViewport.style.overflow,
+        }
+      : null;
 
+    // Temporarily modify styles for full capture
     contentToCapture.style.height = 'auto';
     contentToCapture.style.overflowY = 'visible';
+    const temporaryPadding = '50px'; // Ensure last lines are captured
+    contentToCapture.style.paddingBottom = temporaryPadding;
+
+
     if (scrollableViewport) {
       scrollableViewport.style.height = 'auto';
       scrollableViewport.style.overflow = 'visible';
     }
-    contentToCapture.style.paddingBottom = '50px'; // Add padding for html2canvas to capture everything
-
+    
+    await new Promise(resolve => setTimeout(resolve, 100)); // Allow DOM to update
 
     try {
       const canvas = await html2canvas(contentToCapture, {
         scale: 2, 
         useCORS: true,
         logging: false, 
-        windowWidth: contentToCapture.scrollWidth, // Capture full width
-        windowHeight: contentToCapture.scrollHeight, // Capture full scroll height
+        width: contentToCapture.offsetWidth, // Capture based on actual rendered width
+        height: contentToCapture.offsetHeight, // Capture based on actual rendered height including temp padding
+        windowWidth: contentToCapture.scrollWidth,
+        windowHeight: contentToCapture.scrollHeight,
+        x: 0,
+        y: 0,
+        scrollX: -window.scrollX, // Ensure capture starts from the element's top-left relative to viewport
+        scrollY: -window.scrollY, // if element is not at 0,0 of document
       });
 
+      // Restore original styles
       contentToCapture.style.height = originalContentStyle.height;
       contentToCapture.style.overflowY = originalContentStyle.overflowY;
       contentToCapture.style.paddingBottom = originalContentStyle.paddingBottom;
+
       if (scrollableViewport && originalViewportStyle) {
         scrollableViewport.style.height = originalViewportStyle.height;
         scrollableViewport.style.overflow = originalViewportStyle.overflow;
@@ -433,45 +461,41 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const imgProps = pdf.getImageProperties(imgData);
       
       const pdfImgWidth = pdfPageWidth - 2 * PAGE_MARGIN_MM;
-      const pdfImgHeight = (imgProps.height * pdfImgWidth) / imgProps.width;
+      const totalPdfImgHeight = (imgProps.height * pdfImgWidth) / imgProps.width;
 
-      let yPositionInImage = 0;
+      let yOffsetForImageOnPdf = 0; 
       let currentPage = 0;
-      const MAX_PDF_PAGES = 50; // Safety break
+      const MAX_PDF_PAGES = 50; 
 
-      while (yPositionInImage < pdfImgHeight && currentPage < MAX_PDF_PAGES) {
+      while (yOffsetForImageOnPdf < totalPdfImgHeight && currentPage < MAX_PDF_PAGES) {
         currentPage++;
         if (currentPage > 1) {
           pdf.addPage();
         }
-        drawPageHeaderAndFooter(currentPage);
+        drawPageHeaderAndFooter(pdf, currentPage, svgDataUrl, pdfPageWidth, PAGE_MARGIN_MM, HEADER_HEIGHT_MM, FOOTER_HEIGHT_MM);
         
-        // Calculate the height of the image segment to draw on the current PDF page
-        const imageSegmentHeightOnPdf = Math.min(MAX_CONTENT_HEIGHT_ON_PAGE_MM, pdfImgHeight - yPositionInImage);
-        
-        // Add the image segment. We use the yPositionInImage to effectively "scroll" through the source image.
-        // The y-coordinate for pdf.addImage is the top-left corner where the image segment will be placed.
-        // To show a "scrolled" part of the image, we shift the source image upwards by -yPositionInImage.
-        pdf.addImage(imgData, 'PNG', PAGE_MARGIN_MM, CONTENT_START_Y_MM, pdfImgWidth, pdfImgHeight, undefined, 'NONE', 0, 0, 0, 0, 0, yPositionInImage / (pdfImgHeight / MAX_CONTENT_HEIGHT_ON_PAGE_MM)); // This is complex, let's simplify
-        
-        // Simpler approach for adding image segments (jsPDF doesn't directly support cropping from dataURL this way)
-        // We are adding the *entire* image, but offsetting its Y position on the PDF canvas
-        // such that the desired segment is visible within the CONTENT_START_Y_MM and MAX_CONTENT_HEIGHT_ON_PAGE_MM bounds.
-        pdf.addImage(imgData, 'PNG', PAGE_MARGIN_MM, CONTENT_START_Y_MM - (yPositionInImage * (MAX_CONTENT_HEIGHT_ON_PAGE_MM / imageSegmentHeightOnPdf)) , pdfImgWidth, pdfImgHeight );
+        pdf.addImage(
+          imgData,
+          'PNG',
+          PAGE_MARGIN_MM, 
+          CONTENT_START_Y_MM - yOffsetForImageOnPdf, 
+          pdfImgWidth,    
+          totalPdfImgHeight 
+        );
 
-
-        yPositionInImage += imageSegmentHeightOnPdf * (imgProps.height / pdfImgHeight) ; // Advance position in the source image pixels
-
+        yOffsetForImageOnPdf += MAX_CONTENT_HEIGHT_ON_PAGE_MM; 
       }
       
-      if (currentPage === 0 && pdfImgHeight > 0) { 
-         drawPageHeaderAndFooter(1);
-         pdf.addImage(imgData, 'PNG', PAGE_MARGIN_MM, CONTENT_START_Y_MM, pdfImgWidth, Math.min(pdfImgHeight, MAX_CONTENT_HEIGHT_ON_PAGE_MM));
-      } else if (currentPage === 0 && pdfImgHeight === 0) {
-         drawPageHeaderAndFooter(1);
-         pdf.text("No content was captured for the PDF.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 10);
+      if (currentPage === 0 && totalPdfImgHeight > 0) { 
+         currentPage = 1;
+         drawPageHeaderAndFooter(pdf, currentPage, svgDataUrl, pdfPageWidth, PAGE_MARGIN_MM, HEADER_HEIGHT_MM, FOOTER_HEIGHT_MM);
+         pdf.addImage(imgData, 'PNG', PAGE_MARGIN_MM, CONTENT_START_Y_MM, pdfImgWidth, Math.min(totalPdfImgHeight, MAX_CONTENT_HEIGHT_ON_PAGE_MM));
+      } else if (totalPdfImgHeight <= 0) { // check if less than or equal to zero
+         currentPage = 1;
+         drawPageHeaderAndFooter(pdf, currentPage, svgDataUrl, pdfPageWidth, PAGE_MARGIN_MM, HEADER_HEIGHT_MM, FOOTER_HEIGHT_MM);
+         pdf.setFont("Helvetica", "normal").setFontSize(10).setTextColor(0,0,0);
+         pdf.text("No itinerary content was captured for the PDF.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 10);
       }
-
 
       pdf.save('wanderai-itinerary.pdf');
       toast({ title: "Export Successful", description: `Your itinerary (${currentPage} page(s)) has been downloaded.`, className: "bg-primary text-primary-foreground" });
@@ -479,6 +503,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     } catch (err) {
       console.error("Error during PDF generation with html2canvas:", err);
       toast({ title: "PDF Generation Error", description: (err as Error).message || "Could not generate PDF.", variant: "destructive" });
+      // Restore original styles in case of error too
       contentToCapture.style.height = originalContentStyle.height;
       contentToCapture.style.overflowY = originalContentStyle.overflowY;
       contentToCapture.style.paddingBottom = originalContentStyle.paddingBottom;
