@@ -40,9 +40,8 @@ interface Section {
 }
 
 const sectionKeywords: Record<string, { title: string, icon: React.ElementType, isDayKeyword?: boolean }> = {
-  "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true }, // Primary section key
-  "Overview": { title: "Overview", icon: BookOpenText, isDayKeyword: false }, // Primary section key
-  // Sub-section keywords, to be found *within* a Day's content:
+  "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true }, 
+  "Overview": { title: "Overview", icon: BookOpenText, isDayKeyword: false }, 
   "Activities": { title: "Activities & Attractions", icon: MountainSnow },
   "Attractions": { title: "Activities & Attractions", icon: MountainSnow },
   "Food Recommendations": { title: "Food Recommendations", icon: Utensils },
@@ -62,9 +61,8 @@ function parseItinerary(itineraryText: string): Section[] {
 
   let currentSection: Section | null = null;
 
-  // Regex for primary section headers
-  const dayRegex = new RegExp(`^(Day\\s+\\d+.*?)[:]?$`, "i"); // Matches "Day X: Title" or "Day X Title"
-  const overviewRegex = new RegExp(`^(Overview)[:]?$`, "i");   // Matches "Overview" or "Overview:"
+  const dayRegex = new RegExp(`^(Day\\s+\\d+.*?)[:]?$`, "i"); 
+  const overviewRegex = new RegExp(`^(Overview)[:]?$`, "i");  
 
   lines.forEach(line => {
     const trimmedLine = line.trim();
@@ -74,7 +72,7 @@ function parseItinerary(itineraryText: string): Section[] {
     if (dayMatch) {
       if (currentSection) parsedSections.push(currentSection);
       currentSection = {
-        title: dayMatch[1].trim(), // dayMatch[1] contains "Day X Title"
+        title: dayMatch[1].trim(), 
         icon: sectionKeywords["Day \\d+"].icon,
         content: [],
         isDaySection: true,
@@ -96,16 +94,13 @@ function parseItinerary(itineraryText: string): Section[] {
 
     if (!isNewPrimarySectionStart) {
       if (currentSection) {
-        currentSection.content.push(trimmedLine); // Add the raw line to content
+        currentSection.content.push(line); // Store raw line to preserve original spacing for pre-wrap
       } else {
-        // Content appears before any recognized primary section header.
-        // Group into a default "Introduction" section. This should ideally be "Overview".
         if (parsedSections.length === 0 || parsedSections[parsedSections.length - 1].title !== "Introduction") {
-          currentSection = { title: "Introduction", icon: BookOpenText, content: [trimmedLine], isDaySection: false };
+          currentSection = { title: "Introduction", icon: BookOpenText, content: [line], isDaySection: false };
         } else {
-          // Append to existing "Introduction" section if it was the last one created
           currentSection = parsedSections[parsedSections.length - 1];
-          currentSection.content.push(trimmedLine);
+          currentSection.content.push(line);
         }
       }
     }
@@ -114,18 +109,14 @@ function parseItinerary(itineraryText: string): Section[] {
   if (currentSection) {
     parsedSections.push(currentSection);
   }
-
-  // Basic cleanup: if "Introduction" was created but a proper "Overview" also exists,
-  // and Introduction has no content, remove it.
+  
   const introIndex = parsedSections.findIndex(s => s.title === "Introduction");
   if (introIndex !== -1 && parsedSections.some(s => s.title === "Overview")) {
-    if (parsedSections[introIndex].content.length === 0) {
+    if (parsedSections[introIndex].content.every(c => c.trim() === '')) {
       parsedSections.splice(introIndex, 1);
     }
-    // More complex merging could be done here if needed, but a good prompt is key.
   }
   
-  // Ensure sections are not entirely empty unless it's a designated structural section (Day or Overview)
   return parsedSections.filter(s => s.isDaySection || s.title === "Overview" || s.content.some(c => c.trim() !== ''));
 }
 
@@ -154,7 +145,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
   const renderContent = (contentLines: string[]): JSX.Element[] => {
     const elements: JSX.Element[] = [];
-    let currentListItemGroup: React.ReactNode[][] = [];
+    let currentListItemGroup: React.ReactNode[][] = []; // Stores arrays of nodes for each li
   
     const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s*(.*)/;
   
@@ -172,23 +163,24 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     };
   
     contentLines.forEach((originalLine, lineIdx) => {
-      let lineContentForProcessing = originalLine.trim();
-      if (!lineContentForProcessing) return; 
-  
+      let lineContentForProcessing = originalLine; // Keep leading/trailing spaces for pre-wrap if it's a paragraph
+      if (originalLine.trim() === "") { // Handle empty lines or lines with only spaces if they are meant to be paragraph breaks
+        flushList();
+        elements.push(<p key={`p-empty-${elements.length}-line-${lineIdx}-${Date.now()}`} className="my-1">&nbsp;</p>); // Render an empty paragraph for space
+        return;
+      }
+      
+      lineContentForProcessing = originalLine.trimStart(); // Trim start for subheading/list detection
       let isSubheadingProcessed = false;
-      // Check for subheadings (Activities, Food, etc.)
+
       for (const keyword in sectionKeywords) {
-        if (sectionKeywords[keyword].isDayKeyword || keyword.toLowerCase() === "overview") {
-          continue; // These are primary section types, not subheadings within content
-        }
-  
-        // Regex to match "Keyword:" or "Keyword :" or "Keyword" (if it's a standalone line followed by items)
+        if (sectionKeywords[keyword].isDayKeyword || keyword.toLowerCase() === "overview") continue;
         const subheadingRegex = new RegExp(`^(${keyword.replace(/\s/g, '\\s')}(?:\\s*Recommendations)?)\\s*:?(.*)`, "i");
         const match = lineContentForProcessing.match(subheadingRegex);
   
         if (match) {
           flushList();
-          const subheadingTitle = match[1].trim(); // The matched keyword, e.g., "Activities"
+          const subheadingTitle = match[1].trim();
           const { icon: IconComponent } = sectionKeywords[keyword];
           elements.push(
             <h4 key={`subhead-${elements.length}-${lineIdx}-${Date.now()}`} className="text-lg font-headline font-semibold text-primary/80 mt-4 mb-1.5 flex items-center">
@@ -196,19 +188,13 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
               {subheadingTitle}
             </h4>
           );
-          lineContentForProcessing = match[2]?.trim() || ""; // Remaining text on the same line
+          lineContentForProcessing = match[2]?.trim() || ""; 
           isSubheadingProcessed = true;
-          if (!lineContentForProcessing) { // If subheading was the whole line
-            break; 
-          }
-          // If there's remaining text, it will be processed by list/paragraph logic below
+          if (!lineContentForProcessing) break;
         }
       }
-      if (isSubheadingProcessed && !lineContentForProcessing) {
-        return; // Move to next line if subheading fully handled this line
-      }
+      if (isSubheadingProcessed && !lineContentForProcessing) return;
       
-      // Process the (potentially remaining) lineContentForProcessing for lists or paragraphs
       let isList = false;
       let listItemText = "";
       let makeListItemContentBold = false;
@@ -228,21 +214,19 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       }
   
       if (isList) {
-        if (listItemText) { 
+        if (listItemText || makeListItemContentBold) { // Ensure we add li even if text is empty but bold marker was there
           let processedNodes = processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`);
           if (makeListItemContentBold) {
-            processedNodes = [<strong key={`bold-wrapper-${lineIdx}-${Date.now()}`}>{processedNodes}</strong>];
+            processedNodes = [<strong key={`bold-wrapper-${lineIdx}-${Date.now()}`}>{processedNodes.length > 0 ? processedNodes : <>&nbsp;</>}</strong>];
           }
           currentListItemGroup.push(processedNodes);
-        } else if (makeListItemContentBold && !listItemText) {
-            currentListItemGroup.push([<strong key={`bold-empty-li-${lineIdx}-${Date.now}`}>&nbsp;</strong>]);
         }
       } else {
         flushList(); 
-        if (lineContentForProcessing) { // Ensure there's actual text for the paragraph
+        if (originalLine.trim()) { 
             elements.push(
               <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
-                {processLineForBold(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
+                {processLineForBold(originalLine, `p-content-${elements.length}-line-${lineIdx}`)}
               </p>
             );
         }
@@ -251,12 +235,10 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
     flushList(); 
   
-    if (elements.length === 0 ) {
-        if (contentLines.some(l => l.trim() !== '')) {
-            return [<p key={`no-details-provided-${Date.now()}`} className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
-        } else {
-             return [<p key={`no-content-available-${Date.now()}`} className="text-muted-foreground font-body my-2">No content available for this section.</p>];
-        }
+    if (elements.length === 0 && contentLines.some(l => l.trim() !== '')) {
+        return [<p key={`no-details-provided-${Date.now()}`} className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
+    } else if (elements.length === 0) {
+        return [<p key={`no-content-available-${Date.now()}`} className="text-muted-foreground font-body my-2">No content available for this section.</p>];
     }
     return elements;
   };
@@ -295,42 +277,77 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       toast({ title: "Error", description: "Could not find itinerary content to export.", variant: "destructive"});
       return;
     }
-    setIsExportingPdf(true);
-    try {
-      const canvas = await html2canvas(itineraryContentRef.current, { 
-        scale: 2, 
-        useCORS: true, 
-        backgroundColor: '#ffffff', 
-      });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfMargin = 10; 
-      const pdfWidth = pdf.internal.pageSize.getWidth() - 2 * pdfMargin;
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      const pageHeight = pdf.internal.pageSize.getHeight() - 2 * pdfMargin;
-      
-      let heightLeft = pdfHeight;
-      let position = pdfMargin; 
+    
+    setIsExportingPdf(true); // This will trigger UI changes (ScrollArea height) and button loading state
 
-      pdf.addImage(imgData, 'PNG', pdfMargin, position, pdfWidth, pdfHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - pdfHeight + pdfMargin; 
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', pdfMargin, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
+    // Allow DOM to update with ScrollArea at full height
+    setTimeout(async () => {
+      if (!itineraryContentRef.current) { // Double check ref after timeout
+        setIsExportingPdf(false);
+        toast({ title: "Error", description: "Export cancelled, content not found after delay.", variant: "destructive"});
+        return;
       }
-      pdf.save('wanderai-itinerary.pdf');
-      toast({ title: "Export Successful", description: "Your itinerary has been downloaded as a PDF.", className: "bg-primary text-primary-foreground" });
-    } catch (err) {
-      console.error("Error exporting PDF:", err);
-      toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF.", variant: "destructive"});
-    } finally {
-      setIsExportingPdf(false);
-    }
+      try {
+        const canvas = await html2canvas(itineraryContentRef.current, { 
+          scale: 2, 
+          useCORS: true, 
+          backgroundColor: '#ffffff',
+          // Use the full scroll height of the content for the canvas
+          windowHeight: itineraryContentRef.current.scrollHeight,
+          windowWidth: itineraryContentRef.current.scrollWidth,
+          scrollY: 0, // Capture from the top of the element
+        });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfMargin = 10; 
+        const pdfWidth = pdf.internal.pageSize.getWidth() - 2 * pdfMargin;
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width; // Total height of the image scaled to PDF width
+        const pageContentHeight = pdf.internal.pageSize.getHeight() - 2 * pdfMargin; // Usable height on one PDF page
+        
+        let currentImagePartY = 0; // The Y offset within the source canvas image
+        let pageNumber = 0;
+
+        while (currentImagePartY < imgProps.height) {
+          if (pageNumber > 0) {
+            pdf.addPage();
+          }
+          
+          const sourceX = 0;
+          const sourceY = currentImagePartY;
+          const sourceWidth = imgProps.width;
+          // Calculate how much of the source image height can fit on this PDF page
+          const sourceHeightThatFitsOnPage = Math.min(imgProps.height - currentImagePartY, (pageContentHeight / pdfHeight) * imgProps.height);
+
+          // Add the image segment to the PDF
+          // We are adding the *entire* canvas image (imgData) each time, but jsPDF clips it based on pdfHeight.
+          // For multi-page, we need to adjust the y-position of where the *entire* image is placed on the *new* page.
+          // The y-position for addImage on subsequent pages should be negative, shifting the full image upwards.
+          const yPositionOnPdfPage = pageNumber === 0 ? pdfMargin : pdfMargin - (currentImagePartY / imgProps.height * pdfHeight);
+
+          pdf.addImage(imgData, 'PNG', pdfMargin, yPositionOnPdfPage, pdfWidth, pdfHeight);
+          
+          currentImagePartY += sourceHeightThatFitsOnPage;
+          pageNumber++;
+
+          // Safety break for very long content, though jsPDF handles many pages
+          if (pageNumber > 50) { 
+            toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
+            break; 
+          }
+        }
+
+        pdf.save('wanderai-itinerary.pdf');
+        toast({ title: "Export Successful", description: "Your itinerary has been downloaded as a PDF.", className: "bg-primary text-primary-foreground" });
+      } catch (err) {
+        console.error("Error exporting PDF:", err);
+        toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF.", variant: "destructive"});
+      } finally {
+        setIsExportingPdf(false); // Revert UI changes and button loading state
+      }
+    }, 300); // Increased delay slightly for DOM updates
   };
+
 
   if (isLoading) {
     return (
@@ -367,10 +384,10 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           <CardDescription className="font-body">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
         </div>
         <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
-          <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isExportingPdf || isRefining}>
+          <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
             <Edit3 className="mr-2 h-4 w-4" /> {showRefineForm ? "Cancel Refine" : "Refine Itinerary"}
           </Button>
-          <Button onClick={handleExportPdf} variant="outline" className="text-primary border-primary hover:bg-primary/10 font-body w-full sm:w-auto" disabled={isExportingPdf || isRefining}>
+          <Button onClick={handleExportPdf} variant="outline" className="text-primary border-primary hover:bg-primary/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
             {isExportingPdf ? <LoadingSpinner size={20} /> : <><Download className="mr-2 h-4 w-4" /> Export to PDF</>}
           </Button>
         </div>
@@ -406,7 +423,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         )}
 
         <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
-          <ScrollArea className="h-[600px] p-1"> 
+          {/* ScrollArea's height is now conditional for PDF export */}
+          <ScrollArea className={`p-1 ${isExportingPdf ? 'h-auto overflow-y-visible' : 'h-[600px] overflow-y-auto'}`}> 
             {otherSections.map((section, idx) => (
               <div key={`other-${idx}-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
                 <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
@@ -451,6 +469,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
+    
+
     
 
     
