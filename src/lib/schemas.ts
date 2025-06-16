@@ -4,7 +4,7 @@ import { z } from "zod";
 export const ItineraryInputSchema = z.object({
   destination: z.string().min(3, "Destination must be at least 3 characters long.").max(100),
   interests: z.string().min(5, "Interests must be at least 5 characters long.").max(500),
-  currency: z.enum(["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF"], {
+  currency: z.enum(["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "INR"], {
     errorMap: () => ({ message: "Please select a valid currency." }),
   }),
   budgetAmount: z.coerce.number().positive("Budget must be a positive number.").max(1000000, "Budget seems too high."),

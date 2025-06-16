@@ -30,6 +30,7 @@ const currencyOptions = [
   { value: "CAD", label: "CAD - Canadian Dollar" },
   { value: "AUD", label: "AUD - Australian Dollar" },
   { value: "CHF", label: "CHF - Swiss Franc" },
+  { value: "INR", label: "INR - Indian Rupee" },
 ];
 
 export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoading }: ItineraryInputFormProps) {
