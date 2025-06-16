@@ -305,15 +305,12 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         
         const ptToMm = (pt: number) => pt * 0.352778;
 
-        // Overall Margin for the image content on the page
         const contentPageMargin = 10; // mm 
 
-        // Calculate width for the image on the PDF page
         const imageStripWidth_onPage = pdf.internal.pageSize.getWidth() - 2 * contentPageMargin;
-        // Calculate total scaled height of the entire image strip if rendered at imageStripWidth_onPage
         const totalImageStripHeight_pdf_units = (imgProps.height * imageStripWidth_onPage) / imgProps.width;
 
-        let currentImagePartY_src_pixels = 0; // Tracks the Y-offset in the source image (canvas pixels)
+        let currentImagePartY_src_pixels = 0; 
         let pageNumber = 0;
 
         while (currentImagePartY_src_pixels < imgProps.height) {
@@ -322,73 +319,72 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           }
           pageNumber++;
 
-          const currentPageWidth = pdf.internal.pageSize.getWidth(); // e.g., 210mm for A4
-          const currentPageHeight = pdf.internal.pageSize.getHeight(); // e.g., 297mm for A4
+          const currentPageWidth = pdf.internal.pageSize.getWidth(); 
+          const currentPageHeight = pdf.internal.pageSize.getHeight(); 
 
-          // ---- START PDF HEADER ----
-          const headerSideMargin = 10; // mm from side edges for text
-          const headerTopMargin = 10; // mm from top edge for text
+          // ---- START PDF HEADER (Top Left) ----
+          const headerSideMargin = 10; // mm from left edge for text
+          const headerTopMargin = 10;  // mm from top edge for text
+          const textSpacingMm = 1.5;   // mm space between logo and app name
 
-          const logoChar = "✈";
+          const logoChar = "✈"; // Unicode plane icon
           const appNameText = "WanderAI";
           const taglineText = "Your Personal AI Travel Planner";
 
           const appNameFontSizePt = 14;
           const taglineFontSizePt = 7;
-          const logoFontSizePt = 14;
-          
+          const logoFontSizePt = 14; 
+
+          // Calculate Y baselines
+          // Using Math.max for baseline if logo and app name have different font sizes.
+          const logoAppBaselineY_mm = headerTopMargin + ptToMm(Math.max(logoFontSizePt, appNameFontSizePt) * 0.75);
+          const taglineBaselineY_mm = logoAppBaselineY_mm + ptToMm(taglineFontSizePt) + ptToMm(1); // 1mm gap below app name's visual line
+
+          // 1. Draw Logo
+          pdf.setFont("Helvetica", "normal"); 
+          pdf.setFontSize(logoFontSizePt);
+          pdf.setTextColor(135, 206, 235); // Sky Blue
+          const logoX_mm = headerSideMargin;
+          pdf.text(logoChar, logoX_mm, logoAppBaselineY_mm);
+          const logoCharWidthMm = pdf.getStringUnitWidth(logoChar) * logoFontSizePt / pdf.internal.scaleFactor;
+
+          // 2. Draw App Name
           pdf.setFont("Helvetica", "bold");
           pdf.setFontSize(appNameFontSizePt);
           pdf.setTextColor(135, 206, 235); // Sky Blue
+          const appNameX_mm = logoX_mm + logoCharWidthMm + textSpacingMm;
+          pdf.text(appNameText, appNameX_mm, logoAppBaselineY_mm);
 
-          const appNameWidthMm = pdf.getStringUnitWidth(appNameText) * appNameFontSizePt / pdf.internal.scaleFactor;
-          const appNameX_mm = currentPageWidth - headerSideMargin - appNameWidthMm;
-          const appNameBaselineY_mm = headerTopMargin + ptToMm(appNameFontSizePt * 0.75); // Baseline from top
-          pdf.text(appNameText, appNameX_mm, appNameBaselineY_mm);
-
+          // 3. Draw Tagline
           pdf.setFont("Helvetica", "normal");
           pdf.setFontSize(taglineFontSizePt);
-          pdf.setTextColor(105, 105, 105); // Dim Gray
-
-          const taglineTextWidthMm = pdf.getStringUnitWidth(taglineText) * taglineFontSizePt / pdf.internal.scaleFactor;
-          const taglineX_mm = currentPageWidth - headerSideMargin - taglineTextWidthMm;
-          const taglineBaselineY_mm = appNameBaselineY_mm + ptToMm(taglineFontSizePt) + ptToMm(2); // Tagline below app name
+          pdf.setTextColor(105, 105, 105); // Dim Gray (or your secondary text color)
+          const taglineX_mm = appNameX_mm; // Align with App Name
           pdf.text(taglineText, taglineX_mm, taglineBaselineY_mm);
-
-          pdf.setFont("Helvetica", "normal");
-          pdf.setFontSize(logoFontSizePt);
-          pdf.setTextColor(135, 206, 235); // Sky Blue
           
-          const logoCharWidthMm = pdf.getStringUnitWidth(logoChar) * logoFontSizePt / pdf.internal.scaleFactor;
-          const logoX_mm = appNameX_mm - logoCharWidthMm - ptToMm(2); 
-          pdf.text(logoChar, logoX_mm, appNameBaselineY_mm);
-          
-          const headerBottomY_mm = taglineBaselineY_mm + ptToMm(taglineFontSizePt * 0.25); // Approx bottom of header
-          const contentStartY_onPage = headerBottomY_mm + 3; // 3mm gap below header
+          // Determine bottom of header to calculate where content starts
+          const headerBottomY_mm = taglineBaselineY_mm + ptToMm(taglineFontSizePt * 0.25); // Approx bottom of tagline text
+          const contentStartY_onPage = headerBottomY_mm + 5; // 5mm gap below header
           // ---- END PDF HEADER ----
 
-          pdf.setTextColor(0, 0, 0); // Reset text color
+          pdf.setTextColor(0, 0, 0); // Reset text color for main content if any native text was to follow.
 
-          // Calculate how much of the PDF page height is available for the image content
-          const pageRenderableHeight_for_image = currentPageHeight - contentStartY_onPage - contentPageMargin; // Space from below header to bottom margin
+          const pageRenderableHeight_for_image = currentPageHeight - contentStartY_onPage - contentPageMargin; 
 
-          // y_offset_for_image_strip is where the top of the *entire* imgData is placed on *this* PDF page.
-          // It's scrolled up (negative adjustment) for subsequent pages.
           const scrollAmount_pdf_units = (currentImagePartY_src_pixels / imgProps.height) * totalImageStripHeight_pdf_units;
           const y_offset_for_image_strip = contentStartY_onPage - scrollAmount_pdf_units;
 
           pdf.addImage(imgData, 'PNG',
-            contentPageMargin, // X position for the image strip
+            contentPageMargin, 
             y_offset_for_image_strip,
             imageStripWidth_onPage,
             totalImageStripHeight_pdf_units
           );
           
-          // Advance currentImagePartY_src_pixels based on how much of the source image corresponds to pageRenderableHeight_for_image
           if (totalImageStripHeight_pdf_units > 0) {
             currentImagePartY_src_pixels += (pageRenderableHeight_for_image / totalImageStripHeight_pdf_units) * imgProps.height;
           } else {
-            currentImagePartY_src_pixels = imgProps.height; // Stop if total height is 0
+            currentImagePartY_src_pixels = imgProps.height; 
           }
 
           if (pageNumber > 50) { 
