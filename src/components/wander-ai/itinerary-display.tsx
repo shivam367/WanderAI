@@ -23,7 +23,6 @@ import html2canvas from 'html2canvas';
 // Fallback icon defined before its use
 const CalendarDaysIcon = ({className}: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
-
 interface ItineraryDisplayProps {
   itinerary: string | null;
   isLoading: boolean;
@@ -41,7 +40,9 @@ interface Section {
 }
 
 const sectionKeywords: Record<string, { title: string, icon: React.ElementType, isDayKeyword?: boolean }> = {
-  "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true },
+  "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true }, // Primary section key
+  "Overview": { title: "Overview", icon: BookOpenText, isDayKeyword: false }, // Primary section key
+  // Sub-section keywords, to be found *within* a Day's content:
   "Activities": { title: "Activities & Attractions", icon: MountainSnow },
   "Attractions": { title: "Activities & Attractions", icon: MountainSnow },
   "Food Recommendations": { title: "Food Recommendations", icon: Utensils },
@@ -54,60 +55,78 @@ const sectionKeywords: Record<string, { title: string, icon: React.ElementType, 
   "Transportation": { title: "Transportation", icon: Building2 }
 };
 
+
 function parseItinerary(itineraryText: string): Section[] {
-  const sections: Section[] = [];
+  const parsedSections: Section[] = [];
   const lines = itineraryText.split('\n').filter(line => line.trim() !== '');
 
   let currentSection: Section | null = null;
-  
+
+  // Regex for primary section headers
+  const dayRegex = new RegExp(`^(Day\\s+\\d+.*?)[:]?$`, "i"); // Matches "Day X: Title" or "Day X Title"
+  const overviewRegex = new RegExp(`^(Overview)[:]?$`, "i");   // Matches "Overview" or "Overview:"
+
   lines.forEach(line => {
-    let matchedKeyword = false;
-    for (const keyword in sectionKeywords) {
-      const regex = new RegExp(`^(${keyword.replace("Day \\d+", "Day \\d+.*")}):?`, "i");
-      const match = line.match(regex);
-      if (match) {
-        if (currentSection) {
-          sections.push(currentSection);
-        }
-        let title = sectionKeywords[keyword].title;
-        if (sectionKeywords[keyword].isDayKeyword) {
-          title = match[1].replace(/:$/, '').trim(); 
-        }
-        currentSection = { 
-          title: title, 
-          icon: sectionKeywords[keyword].icon, 
+    const trimmedLine = line.trim();
+    let isNewPrimarySectionStart = false;
+
+    const dayMatch = trimmedLine.match(dayRegex);
+    if (dayMatch) {
+      if (currentSection) parsedSections.push(currentSection);
+      currentSection = {
+        title: dayMatch[1].trim(), // dayMatch[1] contains "Day X Title"
+        icon: sectionKeywords["Day \\d+"].icon,
+        content: [],
+        isDaySection: true,
+      };
+      isNewPrimarySectionStart = true;
+    } else {
+      const overviewMatch = trimmedLine.match(overviewRegex);
+      if (overviewMatch) {
+        if (currentSection) parsedSections.push(currentSection);
+        currentSection = {
+          title: "Overview",
+          icon: sectionKeywords["Overview"].icon,
           content: [],
-          isDaySection: !!sectionKeywords[keyword].isDayKeyword 
+          isDaySection: false,
         };
-        const contentAfterColon = line.substring(match[0].length).trim();
-        if (contentAfterColon) {
-          currentSection.content.push(contentAfterColon);
-        }
-        matchedKeyword = true;
-        break;
+        isNewPrimarySectionStart = true;
       }
     }
 
-    if (!matchedKeyword && currentSection) {
-      currentSection.content.push(line.trim());
-    } else if (!matchedKeyword && !currentSection) {
-      if (sections.length === 0 || sections[sections.length-1].title !== "Overview") {
-         if (currentSection) sections.push(currentSection);
-        currentSection = { title: "Overview", icon: BookOpenText, content: [] };
+    if (!isNewPrimarySectionStart) {
+      if (currentSection) {
+        currentSection.content.push(trimmedLine); // Add the raw line to content
+      } else {
+        // Content appears before any recognized primary section header.
+        // Group into a default "Introduction" section. This should ideally be "Overview".
+        if (parsedSections.length === 0 || parsedSections[parsedSections.length - 1].title !== "Introduction") {
+          currentSection = { title: "Introduction", icon: BookOpenText, content: [trimmedLine], isDaySection: false };
+        } else {
+          // Append to existing "Introduction" section if it was the last one created
+          currentSection = parsedSections[parsedSections.length - 1];
+          currentSection.content.push(trimmedLine);
+        }
       }
-      currentSection!.content.push(line.trim());
     }
   });
 
   if (currentSection) {
-    sections.push(currentSection);
-  }
-  
-  if (sections.length === 0 && itineraryText.trim() !== "") {
-    sections.push({ title: "Generated Itinerary", icon: BookOpenText, content: itineraryText.split('\n').filter(l => l.trim() !== '') });
+    parsedSections.push(currentSection);
   }
 
-  return sections.filter(section => section.content.some(line => line.trim() !== ''));
+  // Basic cleanup: if "Introduction" was created but a proper "Overview" also exists,
+  // and Introduction has no content, remove it.
+  const introIndex = parsedSections.findIndex(s => s.title === "Introduction");
+  if (introIndex !== -1 && parsedSections.some(s => s.title === "Overview")) {
+    if (parsedSections[introIndex].content.length === 0) {
+      parsedSections.splice(introIndex, 1);
+    }
+    // More complex merging could be done here if needed, but a good prompt is key.
+  }
+  
+  // Ensure sections are not entirely empty unless it's a designated structural section (Day or Overview)
+  return parsedSections.filter(s => s.isDaySection || s.title === "Overview" || s.content.some(c => c.trim() !== ''));
 }
 
 
@@ -127,7 +146,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     return parts.filter(part => part.length > 0) 
       .map((part, idx) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={`${keyPrefix}-bold-${idx}`}>{part.slice(2, -2)}</strong>;
+          return <strong key={`${keyPrefix}-bold-${idx}-${Date.now()}`}>{part.slice(2, -2)}</strong>;
         }
         return part;
       });
@@ -135,7 +154,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
   const renderContent = (contentLines: string[]): JSX.Element[] => {
     const elements: JSX.Element[] = [];
-    let currentListItemGroup: React.ReactNode[][] = []; // Stores arrays of ReactNodes for each <li>
+    let currentListItemGroup: React.ReactNode[][] = [];
   
     const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s*(.*)/;
   
@@ -154,57 +173,85 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
     contentLines.forEach((originalLine, lineIdx) => {
       let lineContentForProcessing = originalLine.trim();
-      if (!lineContentForProcessing) return; // Skip empty lines effectively
+      if (!lineContentForProcessing) return; 
   
+      let isSubheadingProcessed = false;
+      // Check for subheadings (Activities, Food, etc.)
+      for (const keyword in sectionKeywords) {
+        if (sectionKeywords[keyword].isDayKeyword || keyword.toLowerCase() === "overview") {
+          continue; // These are primary section types, not subheadings within content
+        }
+  
+        // Regex to match "Keyword:" or "Keyword :" or "Keyword" (if it's a standalone line followed by items)
+        const subheadingRegex = new RegExp(`^(${keyword.replace(/\s/g, '\\s')}(?:\\s*Recommendations)?)\\s*:?(.*)`, "i");
+        const match = lineContentForProcessing.match(subheadingRegex);
+  
+        if (match) {
+          flushList();
+          const subheadingTitle = match[1].trim(); // The matched keyword, e.g., "Activities"
+          const { icon: IconComponent } = sectionKeywords[keyword];
+          elements.push(
+            <h4 key={`subhead-${elements.length}-${lineIdx}-${Date.now()}`} className="text-lg font-headline font-semibold text-primary/80 mt-4 mb-1.5 flex items-center">
+              <IconComponent className="mr-2 h-5 w-5 text-primary/70 shrink-0" />
+              {subheadingTitle}
+            </h4>
+          );
+          lineContentForProcessing = match[2]?.trim() || ""; // Remaining text on the same line
+          isSubheadingProcessed = true;
+          if (!lineContentForProcessing) { // If subheading was the whole line
+            break; 
+          }
+          // If there's remaining text, it will be processed by list/paragraph logic below
+        }
+      }
+      if (isSubheadingProcessed && !lineContentForProcessing) {
+        return; // Move to next line if subheading fully handled this line
+      }
+      
+      // Process the (potentially remaining) lineContentForProcessing for lists or paragraphs
       let isList = false;
       let listItemText = "";
       let makeListItemContentBold = false;
   
-      // Check for direct list match first
       const directListMatch = lineContentForProcessing.match(listRegex);
-  
       if (directListMatch) {
         isList = true;
         listItemText = directListMatch[1].trim();
       } else if (lineContentForProcessing.startsWith('**') && lineContentForProcessing.endsWith('**')) {
-        // If not a direct list, check if an *entirely bolded* line is a list item inside
         const unboldedLine = lineContentForProcessing.slice(2, -2).trim();
         const potentialListMatchInsideBold = unboldedLine.match(listRegex);
         if (potentialListMatchInsideBold) {
           isList = true;
           listItemText = potentialListMatchInsideBold[1].trim();
-          makeListItemContentBold = true; // The content of this li should be entirely bold
+          makeListItemContentBold = true;
         }
       }
   
       if (isList) {
-        if (listItemText) { // Ensure there's actual text for the list item
+        if (listItemText) { 
           let processedNodes = processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`);
           if (makeListItemContentBold) {
-            // Wrap the already processed nodes (which might contain internal bolds) in another strong tag
             processedNodes = [<strong key={`bold-wrapper-${lineIdx}-${Date.now()}`}>{processedNodes}</strong>];
           }
           currentListItemGroup.push(processedNodes);
         } else if (makeListItemContentBold && !listItemText) {
-            // Handle case like "**-**" (bolded marker only) - create an empty bold list item
             currentListItemGroup.push([<strong key={`bold-empty-li-${lineIdx}-${Date.now}`}>&nbsp;</strong>]);
         }
-        // If !listItemText and !makeListItemContentBold, it's like an empty list item from " - " - skip
       } else {
-        // It's a paragraph
-        flushList(); // Render any pending list first
-        // Paragraph text is the original trimmed line, as it wasn't a list item
-        elements.push(
-          <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
-            {processLineForBold(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
-          </p>
-        );
+        flushList(); 
+        if (lineContentForProcessing) { // Ensure there's actual text for the paragraph
+            elements.push(
+              <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
+                {processLineForBold(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
+              </p>
+            );
+        }
       }
     });
   
-    flushList(); // Render any remaining list items at the end
+    flushList(); 
   
-    if (elements.length === 0 ) { // Check if contentLines had non-empty, non-whitespace lines
+    if (elements.length === 0 ) {
         if (contentLines.some(l => l.trim() !== '')) {
             return [<p key={`no-details-provided-${Date.now()}`} className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
         } else {
@@ -358,7 +405,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
 
-        <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border"> {/* Changed to white background for PDF export clarity */}
+        <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
           <ScrollArea className="h-[600px] p-1"> 
             {otherSections.map((section, idx) => (
               <div key={`other-${idx}-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
@@ -404,6 +451,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
+    
+
     
 
     
