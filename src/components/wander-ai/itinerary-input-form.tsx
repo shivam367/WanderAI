@@ -1,3 +1,4 @@
+
 // src/components/wander-ai/itinerary-input-form.tsx
 "use client";
 
@@ -59,7 +60,10 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
   // Sync textarea with chip selections
   useEffect(() => {
     const interestsArray = Array.from(selectedChips);
-    form.setValue("interests", interestsArray.join(", "), { shouldValidate: true });
+    // Only update form if the string value actually changes
+    if (form.getValues("interests") !== interestsArray.join(", ")) {
+      form.setValue("interests", interestsArray.join(", "), { shouldValidate: true });
+    }
   }, [selectedChips, form]);
 
   // Sync chip selections with textarea (e.g., if user types manually or pastes)
@@ -67,13 +71,19 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
   useEffect(() => {
     if (typeof watchedInterests === 'string') {
       const interestsArray = watchedInterests.split(',').map(item => item.trim()).filter(item => item.length > 0);
-      const newSelectedChips = new Set(interestsArray.filter(interest => commonInterests.includes(interest)));
-      // Only update if different to avoid infinite loop
-      if (newSelectedChips.size !== selectedChips.size || !Array.from(newSelectedChips).every(chip => selectedChips.has(chip))) {
-        setSelectedChips(newSelectedChips);
-      }
+      const newSelectedChipsFromText = new Set(interestsArray.filter(interest => commonInterests.includes(interest)));
+
+      setSelectedChips(prevSelectedChips => {
+        const contentsAreEqual = newSelectedChipsFromText.size === prevSelectedChips.size &&
+                                 Array.from(newSelectedChipsFromText).every(chip => prevSelectedChips.has(chip));
+        if (contentsAreEqual) {
+          return prevSelectedChips; // Return the same Set instance to prevent re-render
+        } else {
+          return newSelectedChipsFromText; // Return the new Set instance
+        }
+      });
     }
-  }, [watchedInterests, selectedChips]);
+  }, [watchedInterests]);
 
 
   const handleChipToggle = (interest: string) => {
@@ -107,7 +117,8 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
         description: (error as Error).message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
-      onItineraryGenerated("", form.getValues());
+      // Pass back current form values even on error, so dashboard state is consistent
+      onItineraryGenerated("", form.getValues()); 
     } finally {
       setIsLoading(false);
     }
@@ -194,7 +205,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center font-body"><DollarSign className="mr-2 h-4 w-4 text-primary" />Currency</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className="font-body">
                           <SelectValue placeholder="Select currency" />
@@ -255,3 +266,4 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
     </Card>
   );
 }
+
