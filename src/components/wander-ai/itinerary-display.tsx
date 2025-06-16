@@ -36,17 +36,18 @@ interface ItineraryDisplayProps {
 // PDF Styling Constants & Page Dimensions (A4 in mm)
 const PDF_PAGE_WIDTH_MM = 210;
 const PDF_PAGE_HEIGHT_MM = 297;
-const PAGE_MARGIN_MM = 10; // Reduced margin
-const HEADER_HEIGHT_MM = 15; // Reduced header height
-const FOOTER_HEIGHT_MM = 10; // Reduced footer height
+const PAGE_MARGIN_MM = 8; // Adjusted for wider content
+const HEADER_HEIGHT_MM = 15; 
+const FOOTER_HEIGHT_MM = 10; 
 
-const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_HEIGHT_MM;
 const MAX_CONTENT_WIDTH_MM = PDF_PAGE_WIDTH_MM - 2 * PAGE_MARGIN_MM;
+const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_HEIGHT_MM;
 const MAX_CONTENT_HEIGHT_ON_PAGE_MM = PDF_PAGE_HEIGHT_MM - CONTENT_START_Y_MM - FOOTER_HEIGHT_MM - PAGE_MARGIN_MM;
 
-const PDF_PRIMARY_COLOR_RGB_STRING = "135, 206, 235"; // Sky Blue from theme for text
-const PDF_TEXT_COLOR_MUTED_RGB_STRING = "100, 100, 100"; // Muted gray for less emphasis
-const PDF_LINE_COLOR_RGB_STRING = "200, 200, 200"; // Light gray for lines
+
+const PDF_PRIMARY_COLOR_RGB_STRING = "135, 206, 235"; 
+const PDF_TEXT_COLOR_MUTED_RGB_STRING = "100, 100, 100"; 
+const PDF_LINE_COLOR_RGB_STRING = "200, 200, 200"; 
 
 const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#87CEEB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22h20"></path><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"></path></svg>`;
 
@@ -165,8 +166,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   const { toast } = useToast();
   const [showRefineForm, setShowRefineForm] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const itineraryContentRef = useRef<HTMLDivElement>(null); // Wrapper for ScrollArea
-  const scrollAreaViewportRef = useRef<HTMLDivElement>(null); // The actual scrollable viewport
+  const itineraryContentRef = useRef<HTMLDivElement>(null); 
+  const scrollAreaViewportRef = useRef<HTMLDivElement>(null); 
   
   const refineForm = useForm<RefineFormInputType>({
     resolver: zodResolver(RefineItineraryInputSchema),
@@ -341,13 +342,13 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     pdf.text("Your Personal AI Travel Planner", textStartX, logoY + (logoHeightMm/2) + 1 + 4);
 
     // Footer
-    const footerLineY = PDF_PAGE_HEIGHT_MM - FOOTER_HEIGHT_MM - PAGE_MARGIN_MM; // Position line above footer text
+    const footerLineY = PDF_PAGE_HEIGHT_MM - FOOTER_HEIGHT_MM - PAGE_MARGIN_MM; 
     pdf.setDrawColor(Number(PDF_LINE_COLOR_RGB_STRING.split(',')[0]), Number(PDF_LINE_COLOR_RGB_STRING.split(',')[1]), Number(PDF_LINE_COLOR_RGB_STRING.split(',')[2]));
     pdf.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM, footerLineY);
 
     pdf.setFont("Helvetica", "normal").setFontSize(8).setTextColor(Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[0]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[1]), Number(PDF_TEXT_COLOR_MUTED_RGB_STRING.split(',')[2]));
     
-    const footerTextY = footerLineY + 4; // Text below the line
+    const footerTextY = footerLineY + 4; 
 
     pdf.text("WanderAI", PAGE_MARGIN_MM, footerTextY);
     
@@ -369,8 +370,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     setIsExportingPdf(true);
 
     const pdf = new jsPDF('p', 'mm', 'a4');
-    
     let svgDataUrl: string | null = null;
+
     const tempSvgContainer = document.createElement('div');
     tempSvgContainer.id = 'temp-svg-container-for-pdf-export';
     tempSvgContainer.style.position = 'absolute';
@@ -382,8 +383,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     document.body.appendChild(tempSvgContainer);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 150));
-      const svgCanvas = await html2canvas(tempSvgContainer, { 
+      await new Promise(resolve => setTimeout(resolve, 250)); // Increased delay
+      const svgCanvas = await html2canvas(tempSvgContainer, { // Capture the container
         scale: 2, 
         backgroundColor: null, 
         useCORS: true,
@@ -402,29 +403,30 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     }
     
     const contentElementToCapture = scrollAreaViewportRef.current;
-    let originalStyles: Record<string, any> = {};
-    const elementsToStyle = [
-        contentElementToCapture, 
-        contentElementToCapture.parentElement, // ScrollArea Root
-        itineraryContentRef.current // Wrapper div for ScrollArea
+    
+    const originalStylesData: Array<{ element: HTMLElement; styles: Record<string, string | null> }> = [];
+
+    const elementsToOverride = [
+        { el: contentElementToCapture, props: { height: 'auto', overflowY: 'visible', paddingBottom: '50px' } },
+        { el: contentElementToCapture.parentElement, props: { height: 'auto', overflowY: 'visible' } }, // ScrollArea Root
+        { el: itineraryContentRef.current, props: { height: 'auto', overflowY: 'visible' } } // itineraryContentRef (wrapper)
     ];
 
-    elementsToStyle.forEach((el, index) => {
-        if (el) {
-            originalStyles[index] = {
-                height: el.style.height,
-                overflowY: el.style.overflowY,
-                paddingBottom: el.style.paddingBottom // Only for contentElement itself
-            };
-            el.style.height = 'auto';
-            el.style.overflowY = 'visible';
-            if (index === 0) { // only add padding to the direct content element
-                 el.style.paddingBottom = '50px'; // temp padding
-            }
+    elementsToOverride.forEach(item => {
+        if (item.el) {
+            const el = item.el as HTMLElement;
+            const savedStyles: Record<string, string | null> = {};
+            Object.keys(item.props).forEach(propName => {
+                savedStyles[propName] = el.style.getPropertyValue(propName);
+            });
+            originalStylesData.push({ element: el, styles: savedStyles });
+            Object.entries(item.props).forEach(([propName, propValue]) => {
+                el.style.setProperty(propName, propValue, 'important');
+            });
         }
     });
     
-    await new Promise(resolve => setTimeout(resolve, 250)); // Increased delay slightly
+    await new Promise(resolve => setTimeout(resolve, 300)); // Ensure styles are applied and reflow happens
 
     try {
       const canvas = await html2canvas(contentElementToCapture, {
@@ -433,9 +435,10 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         logging: false, 
         width: contentElementToCapture.offsetWidth, 
         height: contentElementToCapture.scrollHeight, 
-        windowWidth: contentElementToCapture.offsetWidth,
+        windowWidth: contentElementToCapture.scrollWidth,
         windowHeight: contentElementToCapture.scrollHeight,
         x: 0, y: 0, scrollX: 0, scrollY: 0,
+        backgroundColor: '#FFFFFF', // Added white background
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -444,11 +447,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const pdfImgWidth = MAX_CONTENT_WIDTH_MM;
       const totalPdfImgHeight = (imgProps.height * pdfImgWidth) / imgProps.width;
 
-      let yPositionInImage = 0; 
+      let yOffsetForImageOnPdf = 0; 
       let currentPage = 0;
       const MAX_PDF_PAGES = 50; 
 
-      while (yPositionInImage < totalPdfImgHeight && currentPage < MAX_PDF_PAGES) {
+      while (yOffsetForImageOnPdf < totalPdfImgHeight && currentPage < MAX_PDF_PAGES) {
         currentPage++;
         if (currentPage > 1) {
           pdf.addPage();
@@ -459,12 +462,12 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           imgData,
           'PNG',
           PAGE_MARGIN_MM, 
-          CONTENT_START_Y_MM - yPositionInImage, 
+          CONTENT_START_Y_MM - yOffsetForImageOnPdf, 
           pdfImgWidth,    
           totalPdfImgHeight 
         );
 
-        yPositionInImage += MAX_CONTENT_HEIGHT_ON_PAGE_MM; 
+        yOffsetForImageOnPdf += MAX_CONTENT_HEIGHT_ON_PAGE_MM; 
       }
       
       if (currentPage === 0 && totalPdfImgHeight > 0) { 
@@ -485,13 +488,22 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       console.error("Error during PDF generation with html2canvas:", err);
       toast({ title: "PDF Generation Error", description: (err as Error).message || "Could not generate PDF.", variant: "destructive" });
     } finally {
-        elementsToStyle.forEach((el, index) => {
-            if (el && originalStyles[index]) {
-                el.style.height = originalStyles[index].height;
-                el.style.overflowY = originalStyles[index].overflowY;
-                if (index === 0) {
-                    el.style.paddingBottom = originalStyles[index].paddingBottom;
+        originalStylesData.forEach(item => {
+            Object.entries(item.styles).forEach(([propName, propValue]) => {
+                if (propValue !== null && propValue !== "") {
+                    item.element.style.setProperty(propName, propValue);
+                } else {
+                    item.element.style.removeProperty(propName);
                 }
+            });
+             // Ensure props added for capture are explicitly removed if not present before
+            const appliedProps = elementsToOverride.find(ov => ov.el === item.element)?.props;
+            if (appliedProps) {
+                Object.keys(appliedProps).forEach(propName => {
+                    if (!item.styles[propName]) { // If the original style for this prop was empty/null
+                        item.element.style.removeProperty(propName);
+                    }
+                });
             }
         });
         setIsExportingPdf(false);
@@ -589,8 +601,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         )}
         
         <div ref={itineraryContentRef} className="bg-background text-foreground p-1 rounded-md border border-input">
-          <ScrollArea className="h-[600px] overflow-y-auto p-1"> {/* This is ScrollAreaPrimitive.Root */}
-            <div ref={scrollAreaViewportRef} className="space-y-1"> {/* This is ScrollAreaPrimitive.Viewport */}
+          <ScrollArea className="h-[600px] overflow-y-auto p-1"> 
+            <div ref={scrollAreaViewportRef} className="space-y-1"> 
               {allSectionsInOrderForHtml.map((section) => { 
                 const sectionHtmlId = section.id || `html-display-section-${Math.random().toString(36).substr(2, 9)}`; 
                 if (section.isDaySection) {
