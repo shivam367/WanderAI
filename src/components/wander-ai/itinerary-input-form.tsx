@@ -12,11 +12,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ItineraryInputSchema, type ItineraryInput } from "@/lib/schemas";
 import { generateItinerary, type GenerateItineraryInput as AIInputType } from "@/ai/flows/generate-itinerary";
-import { Wand2, MapPin, Sparkles, DollarSign, Wallet, CalendarDays, CheckCircle, Circle } from "lucide-react";
+import { suggestInterests, type SuggestInterestsInput } from "@/ai/flows/suggest-interests-flow";
+import { Wand2, MapPin, Sparkles, DollarSign, Wallet, CalendarDays, CheckCircle, Circle, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface ItineraryInputFormProps {
   onItineraryGenerated: (itinerary: string, inputDetails: ItineraryInput) => void;
@@ -39,14 +40,14 @@ const commonInterests = [
   "Museums", "Historical Sites", "Local Cuisine", "Shopping", "Nightlife",
   "Beaches", "Mountains", "Hiking", "Water Sports", "Photography",
   "Art & Culture", "Relaxation", "Adventure Sports", "Wildlife Safari",
-  "Yoga & Wellness", "Cooking Classes", "Live Music", "Theme Parks"
+  "Street Food Tours", "City Tours"
 ];
 
 export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoading }: ItineraryInputFormProps) {
   const { toast } = useToast();
   const form = useForm<ItineraryInput>({
     resolver: zodResolver(ItineraryInputSchema),
-    mode: 'onTouched', // Validate on touched or on submit
+    mode: 'onTouched',
     defaultValues: {
       destination: "",
       interests: "",
@@ -57,52 +58,132 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
   });
 
   const [selectedChips, setSelectedChips] = useState<Set<string>>(new Set());
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionBoxRef = useRef<HTMLDivElement>(null);
+  const interestsTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sync textarea with chip selections
-  useEffect(() => {
-    const interestsArray = Array.from(selectedChips);
-    // Only update form if the string value actually changes
-    if (form.getValues("interests") !== interestsArray.join(", ")) {
-      form.setValue("interests", interestsArray.join(", "), { shouldValidate: true });
-    }
-  }, [selectedChips, form]);
-
-  // Sync chip selections with textarea (e.g., if user types manually or pastes)
   const watchedInterests = form.watch("interests");
+
+  // Sync chip visual state from textarea content
   useEffect(() => {
     if (typeof watchedInterests === 'string') {
-      const interestsArrayFromText = watchedInterests.split(',').map(item => item.trim()).filter(item => item.length > 0);
-      const newSelectedChipsFromText = new Set(interestsArrayFromText.filter(interest => commonInterests.includes(interest)));
+      const interestsArrayFromText = watchedInterests.split(',')
+        .map(item => item.trim())
+        .filter(item => item.length > 0);
+      
+      const newSelectedChipsFromText = new Set(
+        interestsArrayFromText.filter(interest => commonInterests.includes(interest))
+      );
 
       setSelectedChips(prevSelectedChips => {
-        // Compare contents of the sets
         const contentsAreEqual = newSelectedChipsFromText.size === prevSelectedChips.size &&
                                  Array.from(newSelectedChipsFromText).every(chip => prevSelectedChips.has(chip));
-        
-        if (contentsAreEqual) {
-          return prevSelectedChips; // Return the same Set instance to prevent re-render
-        } else {
-          return newSelectedChipsFromText; // Return the new Set instance
-        }
+        return contentsAreEqual ? prevSelectedChips : newSelectedChipsFromText;
       });
     }
   }, [watchedInterests]);
 
+  const handleChipToggle = (interestToToggle: string) => {
+    const currentFieldValue = form.getValues("interests") || "";
+    const interestsArray = currentFieldValue.split(',')
+                                        .map(item => item.trim())
+                                        .filter(item => item.length > 0);
+    
+    const uniqueInterestsSet = new Set(interestsArray);
 
-  const handleChipToggle = (interest: string) => {
-    setSelectedChips(prevSelectedChips => {
-      const newSelectedChips = new Set(prevSelectedChips);
-      if (newSelectedChips.has(interest)) {
-        newSelectedChips.delete(interest);
-      } else {
-        newSelectedChips.add(interest);
-      }
-      return newSelectedChips;
-    });
+    if (uniqueInterestsSet.has(interestToToggle)) {
+      uniqueInterestsSet.delete(interestToToggle);
+    } else {
+      uniqueInterestsSet.add(interestToToggle);
+    }
+    
+    const newFieldValue = Array.from(uniqueInterestsSet).join(", ");
+    form.setValue("interests", newFieldValue, { shouldValidate: true, shouldDirty: true });
+    setShowSuggestions(false); // Hide suggestions when a chip is toggled
   };
+
+  // Debounce AI suggestions
+  useEffect(() => {
+    const handler = setTimeout(async () => {
+      const fullQuery = form.getValues("interests");
+      const parts = fullQuery.split(',');
+      const currentQueryPart = parts[parts.length - 1].trim();
+
+      if (currentQueryPart.length >= 2) {
+        setIsSuggesting(true);
+        try {
+          const existingInterestsForAI = parts.slice(0, -1).map(p => p.trim()).filter(p => p.length > 0).join(', ');
+          const result = await suggestInterests({ query: currentQueryPart, existingInterests: existingInterestsForAI });
+          
+          // Filter out suggestions that are too similar to the current query part or already in the full list
+          const allCurrentInterestsLower = new Set(parts.map(p => p.trim().toLowerCase()));
+          const filteredSuggestions = result.suggestions.filter(sugg => 
+            sugg.toLowerCase() !== currentQueryPart.toLowerCase() && 
+            !allCurrentInterestsLower.has(sugg.toLowerCase())
+          );
+
+          setSuggestions(filteredSuggestions);
+          if (filteredSuggestions.length > 0 && document.activeElement === interestsTextareaRef.current) {
+            setShowSuggestions(true);
+          } else {
+            setShowSuggestions(false);
+          }
+        } catch (error) {
+          console.error("Error fetching suggestions:", error);
+          setSuggestions([]);
+          setShowSuggestions(false);
+        } finally {
+          setIsSuggesting(false);
+        }
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [watchedInterests, form]);
+
+  const handleSuggestionClick = (suggestion: string) => {
+    const currentFieldValue = form.getValues("interests") || "";
+    let parts = currentFieldValue.split(',').map(p => p.trim());
+
+    if (parts.length === 1 && parts[0] === "") { 
+        parts = [suggestion];
+    } else if (parts.length > 0) {
+        parts[parts.length - 1] = suggestion; // Replace the last part (query) with the full suggestion
+    }
+    
+    const newFieldValue = parts.filter(p => p.length > 0).join(", ");
+    form.setValue("interests", newFieldValue, { shouldValidate: true, shouldDirty: true });
+    
+    setSuggestions([]);
+    setShowSuggestions(false);
+    interestsTextareaRef.current?.focus(); // Keep focus on textarea
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (suggestionBoxRef.current && !suggestionBoxRef.current.contains(event.target as Node) &&
+          interestsTextareaRef.current && !interestsTextareaRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [suggestionBoxRef, interestsTextareaRef]);
+
 
   const onSubmit: SubmitHandler<ItineraryInput> = async (data) => {
     setIsLoading(true);
+    setShowSuggestions(false); // Hide suggestions on submit
     try {
       const aiInput: AIInputType = {
         destination: data.destination,
@@ -120,7 +201,6 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
         description: (error as Error).message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
-      // Pass back current form values even on error, so dashboard state is consistent
       onItineraryGenerated("", form.getValues()); 
     } finally {
       setIsLoading(false);
@@ -154,20 +234,45 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                 </FormItem>
               )}
             />
+            
             <FormField
               control={form.control}
               name="interests"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="relative">
                   <FormLabel className="flex items-center font-body mb-2"><Sparkles className="mr-2 h-4 w-4 text-primary" />Interests & Activities</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="e.g., Museums, local cuisine, hiking, photography. Or select from below."
+                      placeholder="e.g., Museums, local cuisine, hiking. Type for AI suggestions..."
                       {...field}
+                      ref={interestsTextareaRef}
                       className="font-body min-h-[80px]"
+                      onFocus={() => {
+                        // Show suggestions if any exist and query is long enough
+                         const fullQuery = form.getValues("interests");
+                         const parts = fullQuery.split(',');
+                         const currentQueryPart = parts[parts.length - 1].trim();
+                         if (suggestions.length > 0 && currentQueryPart.length >=2) setShowSuggestions(true);
+                      }}
+                      // onBlur is tricky due to suggestion clicks, handled by global click listener mostly
                     />
                   </FormControl>
                   <FormMessage className="pt-1"/>
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div ref={suggestionBoxRef} className="mt-1 border border-input rounded-md shadow-lg bg-background z-50 absolute w-full max-h-48 overflow-y-auto">
+                      {isSuggesting && <div className="p-2 text-sm text-muted-foreground flex items-center"><LoadingSpinner size={16} className="mr-2"/><span>Loading...</span></div>}
+                      {!isSuggesting && suggestions.map((sugg, index) => (
+                        <button
+                          type="button"
+                          key={index}
+                          onClick={() => handleSuggestionClick(sugg)}
+                          className="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground outline-none"
+                        >
+                          {sugg}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </FormItem>
               )}
             />
@@ -199,7 +304,6 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                     })}
                 </div>
             </div>
-
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <FormField
@@ -269,4 +373,3 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
     </Card>
   );
 }
-
