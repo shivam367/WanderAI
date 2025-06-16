@@ -1,3 +1,4 @@
+
 // src/app/dashboard/page.tsx
 "use client";
 
@@ -58,12 +59,7 @@ export default function DashboardPage() {
 
      if (currentUser && currentUser.email && refinedItinerary && currentGenerationDetails) {
       try {
-        // Note: This replaces the original saved itinerary with the refined one.
-        // If you want to save refined versions as new entries, adjust logic here.
-        // For now, we assume refining updates the *current* session's displayed itinerary,
-        // and the *original* input details are used for saving.
-        // If you want to update the *saved* record, you'd need its ID and an update function in itinerary-storage.
-        // This example just saves the refined version as if it was a new generation from original inputs.
+        // Saves the refined itinerary as a new entry in history.
         apiSaveItinerary(currentUser.email, {
           destination: currentGenerationDetails.destination,
           content: refinedItinerary, // Save refined content
@@ -72,7 +68,7 @@ export default function DashboardPage() {
           duration: currentGenerationDetails.duration,
           interests: currentGenerationDetails.interests,
         });
-         toast({ title: "Refined Itinerary Saved", description: "Your refined itinerary has been updated in your history.", className: "bg-primary text-primary-foreground" });
+         toast({ title: "Refined Itinerary Saved", description: "Your refined itinerary has been saved to your history.", className: "bg-primary text-primary-foreground" });
       } catch (saveError) {
         console.error("Failed to save refined itinerary:", saveError);
         toast({ title: "Save Error", description: "Could not save refined itinerary to history.", variant: "destructive"});
@@ -111,3 +107,4 @@ export default function DashboardPage() {
     </ProtectedRoute>
   );
 }
+
