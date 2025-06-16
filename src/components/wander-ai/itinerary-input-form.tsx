@@ -10,14 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ItineraryInputSchema, type ItineraryInput } from "@/lib/schemas";
-import { generateItinerary, type GenerateItineraryInput } from "@/ai/flows/generate-itinerary";
+import { generateItinerary, type GenerateItineraryInput as AIInputType } from "@/ai/flows/generate-itinerary"; // Renamed to avoid conflict
 import { Wand2, MapPin, Sparkles, DollarSign, Wallet, CalendarDays } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import type React from "react";
 
 interface ItineraryInputFormProps {
-  onItineraryGenerated: (itinerary: string) => void;
+  onItineraryGenerated: (itinerary: string, inputDetails: ItineraryInput) => void; // Pass inputDetails
   setIsLoading: (loading: boolean) => void;
   isLoading: boolean;
 }
@@ -49,7 +49,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
   const onSubmit: SubmitHandler<ItineraryInput> = async (data) => {
     setIsLoading(true);
     try {
-      const aiInput: GenerateItineraryInput = {
+      const aiInput: AIInputType = { // Use renamed AIInputType
         destination: data.destination,
         interests: data.interests,
         currency: data.currency,
@@ -57,7 +57,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
         duration: Number(data.duration),
       };
       const result = await generateItinerary(aiInput);
-      onItineraryGenerated(result.itinerary);
+      onItineraryGenerated(result.itinerary, data); // Pass form data 'data' as inputDetails
     } catch (error) {
       console.error("Error generating itinerary:", error);
       toast({
@@ -65,7 +65,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
         description: (error as Error).message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
-       onItineraryGenerated(""); // Clear previous itinerary on error
+       onItineraryGenerated("", form.getValues()); // Pass current form values even on error
     } finally {
       setIsLoading(false);
     }
@@ -143,7 +143,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                   <FormItem>
                     <FormLabel className="flex items-center font-body"><Wallet className="mr-2 h-4 w-4 text-primary" />Budget Amount</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 1500" {...field} className="font-body" />
+                      <Input type="number" placeholder="e.g., 1500" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} className="font-body" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -156,7 +156,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                   <FormItem>
                     <FormLabel className="flex items-center font-body"><CalendarDays className="mr-2 h-4 w-4 text-primary" />Duration (days)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 7" {...field} className="font-body" />
+                      <Input type="number" placeholder="e.g., 7" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="font-body" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
