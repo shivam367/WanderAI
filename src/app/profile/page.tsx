@@ -1,6 +1,7 @@
 // src/app/profile/page.tsx
 "use client";
 
+import * as React from "react"; // Import React
 import { useEffect } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -191,7 +192,7 @@ export default function ProfilePage() {
                   </form>
                 </Form>
             </CardContent>
-            <CardFooter className="pt-6"> {/* Add some padding top to separate from content */}
+            <CardFooter className="pt-6"> 
               <Button variant="outline" onClick={logout} className="w-full text-destructive border-destructive hover:bg-destructive/10 font-body" disabled={isUpdatingProfile || isChangingPassword || authLoading}>
                 <LogOut className="mr-2 h-5 w-5" /> Logout
               </Button>
