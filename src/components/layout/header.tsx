@@ -18,7 +18,7 @@ export function Header() {
         </Link>
         <nav className="flex items-center space-x-4">
           <Button variant="ghost" asChild>
-            <Link href="/#generate" className="font-body">Plan New Trip</Link>
+            <Link href="/auth" className="font-body">Plan New Trip</Link>
           </Button>
           {/* <Button variant="ghost" asChild>
             <Link href="/my-trips" className="font-body">My Trips</Link>
