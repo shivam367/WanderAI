@@ -21,7 +21,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 // Fallback icon defined before its use
-const CalendarDays = ({className}: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
+const CalendarDaysIcon = ({className}: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
 
 interface ItineraryDisplayProps {
@@ -41,7 +41,7 @@ interface Section {
 }
 
 const sectionKeywords: Record<string, { title: string, icon: React.ElementType, isDayKeyword?: boolean }> = {
-  "Day \\d+": { title: "Day {N}", icon: CalendarDays, isDayKeyword: true },
+  "Day \\d+": { title: "Day {N}", icon: CalendarDaysIcon, isDayKeyword: true },
   "Activities": { title: "Activities & Attractions", icon: MountainSnow },
   "Attractions": { title: "Activities & Attractions", icon: MountainSnow },
   "Food Recommendations": { title: "Food Recommendations", icon: Utensils },
@@ -135,16 +135,16 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
   const renderContent = (contentLines: string[]): JSX.Element[] => {
     const elements: JSX.Element[] = [];
-    let currentListItemGroup: React.ReactNode[][] = []; 
+    let currentListItemGroup: React.ReactNode[][] = []; // Stores arrays of ReactNodes for each <li>
   
-    const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s*(.*)/; 
+    const listRegex = /^\s*(?:[-*\u2022]|\d+\.|\d+\))\s*(.*)/;
   
     const flushList = () => {
       if (currentListItemGroup.length > 0) {
         elements.push(
-          <ul key={`ul-${elements.length}`} className="list-disc list-inside pl-4 my-2 space-y-1 font-body text-foreground/90">
-            {currentListItemGroup.map((listItemContent, idx) => (
-              <li key={`li-item-${elements.length}-${idx}`}>{listItemContent}</li>
+          <ul key={`ul-${elements.length}-${Date.now()}`} className="list-disc list-inside pl-4 my-2 space-y-1 font-body text-foreground/90">
+            {currentListItemGroup.map((listItemNodes, idx) => (
+              <li key={`li-item-${elements.length}-${idx}-${Date.now()}`}>{listItemNodes}</li>
             ))}
           </ul>
         );
@@ -154,60 +154,62 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   
     contentLines.forEach((originalLine, lineIdx) => {
       let lineContentForProcessing = originalLine.trim();
-      let isEntireLineBoldedForList = false;
+      if (!lineContentForProcessing) return; // Skip empty lines effectively
   
-      let listMatch = lineContentForProcessing.match(listRegex);
+      let isList = false;
+      let listItemText = "";
+      let makeListItemContentBold = false;
   
-      if (!listMatch && lineContentForProcessing.startsWith('**') && lineContentForProcessing.endsWith('**')) {
+      // Check for direct list match first
+      const directListMatch = lineContentForProcessing.match(listRegex);
+  
+      if (directListMatch) {
+        isList = true;
+        listItemText = directListMatch[1].trim();
+      } else if (lineContentForProcessing.startsWith('**') && lineContentForProcessing.endsWith('**')) {
+        // If not a direct list, check if an *entirely bolded* line is a list item inside
         const unboldedLine = lineContentForProcessing.slice(2, -2).trim();
-        const potentialMatch = unboldedLine.match(listRegex);
-        if (potentialMatch) {
-          listMatch = potentialMatch;
-          lineContentForProcessing = listMatch[1].trim(); // This is the text part of the list item
-          isEntireLineBoldedForList = true;
-        } else {
-          // Line was bold but not a list item after unbolding, treat as bold paragraph.
-          // lineContentForProcessing remains originalLine.trim() for paragraph processing.
+        const potentialListMatchInsideBold = unboldedLine.match(listRegex);
+        if (potentialListMatchInsideBold) {
+          isList = true;
+          listItemText = potentialListMatchInsideBold[1].trim();
+          makeListItemContentBold = true; // The content of this li should be entirely bold
         }
-      } else if (listMatch) {
-        lineContentForProcessing = listMatch[1].trim(); // Text part of the list item
       }
   
-      if (listMatch) { // It's a list item (either originally or after unbolding)
-        const listItemText = lineContentForProcessing;
-  
-        if (listItemText || isEntireLineBoldedForList) { 
-          let processedItemNodes = processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`);
-          
-          if (isEntireLineBoldedForList) {
-            processedItemNodes = [ // Wrap the processed nodes in a strong tag
-              <strong key={`bold-wrapper-${lineIdx}`}>{processedItemNodes}</strong>
-            ];
+      if (isList) {
+        if (listItemText) { // Ensure there's actual text for the list item
+          let processedNodes = processLineForBold(listItemText, `li-content-${elements.length}-${currentListItemGroup.length}-line-${lineIdx}`);
+          if (makeListItemContentBold) {
+            // Wrap the already processed nodes (which might contain internal bolds) in another strong tag
+            processedNodes = [<strong key={`bold-wrapper-${lineIdx}-${Date.now()}`}>{processedNodes}</strong>];
           }
-          currentListItemGroup.push(processedItemNodes);
+          currentListItemGroup.push(processedNodes);
+        } else if (makeListItemContentBold && !listItemText) {
+            // Handle case like "**-**" (bolded marker only) - create an empty bold list item
+            currentListItemGroup.push([<strong key={`bold-empty-li-${lineIdx}-${Date.now}`}>&nbsp;</strong>]);
         }
-      } else { // It's a paragraph
-        flushList(); 
-        if (originalLine.trim()) { 
-          elements.push(
-            <p key={`p-${elements.length}-line-${lineIdx}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
-              {processLineForBold(originalLine.trim(), `p-content-${elements.length}-line-${lineIdx}`)}
-            </p>
-          );
-        }
+        // If !listItemText and !makeListItemContentBold, it's like an empty list item from " - " - skip
+      } else {
+        // It's a paragraph
+        flushList(); // Render any pending list first
+        // Paragraph text is the original trimmed line, as it wasn't a list item
+        elements.push(
+          <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
+            {processLineForBold(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
+          </p>
+        );
       }
     });
   
-    flushList(); 
+    flushList(); // Render any remaining list items at the end
   
-    if (elements.length === 0 && contentLines.some(l => l.trim() !== '')) {
-        // Fallback: If there was non-empty content but parsing yielded nothing (e.g. only empty list markers)
-        // This could render raw lines or a more specific message.
-        // For now, if elements is empty, the later check handles it.
-    }
-    
-    if (elements.length === 0) {
-        return [<p key="no-details-provided" className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
+    if (elements.length === 0 ) { // Check if contentLines had non-empty, non-whitespace lines
+        if (contentLines.some(l => l.trim() !== '')) {
+            return [<p key={`no-details-provided-${Date.now()}`} className="text-muted-foreground font-body my-2">No specific details provided for this section.</p>];
+        } else {
+             return [<p key={`no-content-available-${Date.now()}`} className="text-muted-foreground font-body my-2">No content available for this section.</p>];
+        }
     }
     return elements;
   };
@@ -356,10 +358,10 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
 
-        <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border">
+        <div ref={itineraryContentRef} className="bg-white text-black p-4 rounded-md border border-border"> {/* Changed to white background for PDF export clarity */}
           <ScrollArea className="h-[600px] p-1"> 
             {otherSections.map((section, idx) => (
-              <div key={`other-${idx}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
+              <div key={`other-${idx}-${Date.now()}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
                 <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
                   <section.icon className="mr-3 h-6 w-6 text-primary/80" />
                   {section.title}
@@ -371,8 +373,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             {daySections.length > 0 && (
               <Accordion type="multiple" className="w-full" defaultValue={daySections.map((_,idx) => `day-${idx}`)}>
                 {daySections.map((section, idx) => (
-                  <AccordionItem value={`day-${idx}`} key={`day-${idx}`} className="mb-2 border-b-0 last:mb-0">
-                     <Card className="shadow-sm overflow-hidden bg-background">
+                  <AccordionItem value={`day-${idx}`} key={`day-${idx}-${Date.now()}`} className="mb-2 border-b-0 last:mb-0">
+                     <Card className="shadow-sm overflow-hidden bg-background text-foreground">
                         <AccordionTrigger className="p-4 hover:no-underline hover:bg-secondary/50 transition-colors rounded-t-lg">
                           <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
                             <section.icon className="mr-3 h-6 w-6 text-primary/80" />
@@ -388,7 +390,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
               </Accordion>
             )}
             {daySections.length === 0 && otherSections.length === 0 && itinerary && itinerary.trim() !== "" && (
-                 <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
+                 <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background text-foreground">
                     <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
                         <BookOpenText className="mr-3 h-6 w-6 text-primary/80" />
                         Generated Itinerary
@@ -402,6 +404,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     </Card>
   );
 }
+    
+
     
 
     
