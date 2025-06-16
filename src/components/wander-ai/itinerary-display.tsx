@@ -36,13 +36,13 @@ interface ItineraryDisplayProps {
 // PDF Styling Constants & Page Dimensions (A4 in mm)
 const PDF_PAGE_WIDTH_MM = 210;
 const PDF_PAGE_HEIGHT_MM = 297;
-const PAGE_MARGIN_MM = 8; // Adjusted for wider content
+const PAGE_MARGIN_MM = 10; 
 const HEADER_HEIGHT_MM = 15; 
 const FOOTER_HEIGHT_MM = 10; 
 
-const MAX_CONTENT_WIDTH_MM = PDF_PAGE_WIDTH_MM - 2 * PAGE_MARGIN_MM;
-const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_HEIGHT_MM;
-const MAX_CONTENT_HEIGHT_ON_PAGE_MM = PDF_PAGE_HEIGHT_MM - CONTENT_START_Y_MM - FOOTER_HEIGHT_MM - PAGE_MARGIN_MM;
+const MAX_CONTENT_WIDTH_MM = PDF_PAGE_WIDTH_MM - 2 * PAGE_MARGIN_MM; // 190mm
+const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_HEIGHT_MM; // 25mm
+const MAX_CONTENT_HEIGHT_ON_PAGE_MM = PDF_PAGE_HEIGHT_MM - CONTENT_START_Y_MM - FOOTER_HEIGHT_MM - PAGE_MARGIN_MM; // 252mm
 
 
 const PDF_PRIMARY_COLOR_RGB_STRING = "135, 206, 235"; 
@@ -372,6 +372,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     const pdf = new jsPDF('p', 'mm', 'a4');
     let svgDataUrl: string | null = null;
 
+    // --- SVG Logo Capture ---
     const tempSvgContainer = document.createElement('div');
     tempSvgContainer.id = 'temp-svg-container-for-pdf-export';
     tempSvgContainer.style.position = 'absolute';
@@ -379,11 +380,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     tempSvgContainer.style.top = '-9999px';
     tempSvgContainer.style.width = '64px'; 
     tempSvgContainer.style.height = '64px';
-    tempSvgContainer.innerHTML = svgLogoString;
     document.body.appendChild(tempSvgContainer);
+    tempSvgContainer.innerHTML = svgLogoString;
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 250)); // Increased delay
+      await new Promise(resolve => setTimeout(resolve, 300)); // Increased delay for SVG rendering
       const svgCanvas = await html2canvas(tempSvgContainer, { // Capture the container
         scale: 2, 
         backgroundColor: null, 
@@ -396,33 +397,33 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     } catch (e) {
       console.error("Error converting SVG logo to canvas image:", e);
       toast({ title: "PDF Logo Error", description: `Could not render the logo. Error: ${(e as Error).message}. Using text fallback.`, variant: "destructive" });
+      // svgDataUrl remains null, header will use fallback text
     } finally {
       if (document.body.contains(tempSvgContainer)) {
         document.body.removeChild(tempSvgContainer);
       }
     }
     
-    const contentElementToCapture = scrollAreaViewportRef.current;
-    
+    // --- Main Content Capture ---
+    const contentElementToCapture = scrollAreaViewportRef.current; 
     const originalStylesData: Array<{ element: HTMLElement; styles: Record<string, string | null> }> = [];
 
+    // Elements whose styles need to be temporarily changed for full capture
     const elementsToOverride = [
-        { el: contentElementToCapture, props: { height: 'auto', overflowY: 'visible', paddingBottom: '50px' } },
-        { el: contentElementToCapture.parentElement, props: { height: 'auto', overflowY: 'visible' } }, // ScrollArea Root
-        { el: itineraryContentRef.current, props: { height: 'auto', overflowY: 'visible' } } // itineraryContentRef (wrapper)
+      { el: itineraryContentRef.current, props: { height: 'auto', overflowY: 'visible', paddingBottom: '100px' } }, // Add significant padding for bottom content
+      { el: scrollAreaViewportRef.current?.parentElement, props: { height: 'auto', overflowY: 'visible', paddingBottom: '0px' } }, // ScrollArea Root
+      { el: scrollAreaViewportRef.current, props: { height: 'auto', overflowY: 'visible', paddingBottom: '0px' } }  // ScrollArea Viewport
     ];
-
+    
     elementsToOverride.forEach(item => {
         if (item.el) {
             const el = item.el as HTMLElement;
             const savedStyles: Record<string, string | null> = {};
             Object.keys(item.props).forEach(propName => {
                 savedStyles[propName] = el.style.getPropertyValue(propName);
+                el.style.setProperty(propName, (item.props as any)[propName], 'important');
             });
             originalStylesData.push({ element: el, styles: savedStyles });
-            Object.entries(item.props).forEach(([propName, propValue]) => {
-                el.style.setProperty(propName, propValue, 'important');
-            });
         }
     });
     
@@ -434,18 +435,18 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         useCORS: true,
         logging: false, 
         width: contentElementToCapture.offsetWidth, 
-        height: contentElementToCapture.scrollHeight, 
+        height: contentElementToCapture.scrollHeight, // Capture full scroll height
         windowWidth: contentElementToCapture.scrollWidth,
         windowHeight: contentElementToCapture.scrollHeight,
         x: 0, y: 0, scrollX: 0, scrollY: 0,
-        backgroundColor: '#FFFFFF', // Added white background
+        backgroundColor: '#FFFFFF', 
       });
 
       const imgData = canvas.toDataURL('image/png');
       const imgProps = pdf.getImageProperties(imgData);
       
       const pdfImgWidth = MAX_CONTENT_WIDTH_MM;
-      const totalPdfImgHeight = (imgProps.height * pdfImgWidth) / imgProps.width;
+      const totalPdfImgHeight = (imgProps.height * pdfImgWidth) / imgProps.width; // Scaled height in mm
 
       let yOffsetForImageOnPdf = 0; 
       let currentPage = 0;
@@ -462,24 +463,28 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           imgData,
           'PNG',
           PAGE_MARGIN_MM, 
-          CONTENT_START_Y_MM - yOffsetForImageOnPdf, 
+          CONTENT_START_Y_MM - yOffsetForImageOnPdf, // Shift the entire image up based on yOffset
           pdfImgWidth,    
           totalPdfImgHeight 
         );
-
         yOffsetForImageOnPdf += MAX_CONTENT_HEIGHT_ON_PAGE_MM; 
       }
       
-      if (currentPage === 0 && totalPdfImgHeight > 0) { 
+      // Handle cases where content is very short or html2canvas fails to capture meaningful height
+      if (currentPage === 0 && totalPdfImgHeight > 0.1) { // Check against a small threshold
          currentPage = 1;
          drawPageHeaderAndFooter(pdf, currentPage, svgDataUrl);
          pdf.addImage(imgData, 'PNG', PAGE_MARGIN_MM, CONTENT_START_Y_MM, pdfImgWidth, Math.min(totalPdfImgHeight, MAX_CONTENT_HEIGHT_ON_PAGE_MM));
-      } else if (totalPdfImgHeight <= 0) { 
-         currentPage = 1;
-         drawPageHeaderAndFooter(pdf, currentPage, svgDataUrl);
+      } else if (currentPage === 0 || totalPdfImgHeight <= 0.1) { // No content was effectively paginated
+         if (currentPage === 0) currentPage = 1; // Ensure at least one page for the message
+         if (currentPage === 1 && yOffsetForImageOnPdf === 0) drawPageHeaderAndFooter(pdf, currentPage, svgDataUrl); // Draw header/footer if not already done
          pdf.setFont("Helvetica", "normal").setFontSize(10).setTextColor(0,0,0);
-         pdf.text("No itinerary content was captured for the PDF.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 10);
+         pdf.text("No itinerary content was captured for the PDF or content is too short.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 10, {maxWidth: MAX_CONTENT_WIDTH_MM});
+         if (itinerary && itinerary.length < 100) { // If original itinerary text is very short
+            pdf.text("Original itinerary text was very short.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 20, {maxWidth: MAX_CONTENT_WIDTH_MM});
+         }
       }
+
 
       pdf.save('wanderai-itinerary.pdf');
       toast({ title: "Export Successful", description: `Your itinerary (${currentPage} page(s)) has been downloaded.`, className: "bg-primary text-primary-foreground" });
@@ -488,22 +493,27 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       console.error("Error during PDF generation with html2canvas:", err);
       toast({ title: "PDF Generation Error", description: (err as Error).message || "Could not generate PDF.", variant: "destructive" });
     } finally {
+        // Restore original styles
         originalStylesData.forEach(item => {
-            Object.entries(item.styles).forEach(([propName, propValue]) => {
-                if (propValue !== null && propValue !== "") {
-                    item.element.style.setProperty(propName, propValue);
+            const appliedPropsForThisElement = elementsToOverride.find(ov => ov.el === item.element)?.props;
+            Object.keys(item.styles).forEach(propName => { // Iterate over saved original styles
+                const originalValue = item.styles[propName];
+                if (originalValue !== null && originalValue !== "") {
+                    item.element.style.setProperty(propName, originalValue);
                 } else {
-                    item.element.style.removeProperty(propName);
+                     // If original value was null/empty, but we applied something, remove it.
+                    if (appliedPropsForThisElement && (appliedPropsForThisElement as any)[propName]) {
+                         item.element.style.removeProperty(propName);
+                    }
                 }
             });
-             // Ensure props added for capture are explicitly removed if not present before
-            const appliedProps = elementsToOverride.find(ov => ov.el === item.element)?.props;
-            if (appliedProps) {
-                Object.keys(appliedProps).forEach(propName => {
-                    if (!item.styles[propName]) { // If the original style for this prop was empty/null
+            // Explicitly remove properties we added if they weren't in originalStyles
+            if (appliedPropsForThisElement) {
+                 Object.keys(appliedPropsForThisElement).forEach(propName => {
+                    if (!(propName in item.styles)) { // If this property wasn't in original styles
                         item.element.style.removeProperty(propName);
                     }
-                });
+                 });
             }
         });
         setIsExportingPdf(false);
@@ -570,7 +580,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent ref={itineraryContentRef} className="bg-background text-foreground p-1 rounded-md border border-input">
         {canRefine && showRefineForm && (
           <Card className="mb-6 bg-secondary/50 p-2 sm:p-4 md:p-6 animate-fade-in">
             <CardHeader>
@@ -600,8 +610,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
         
-        <div ref={itineraryContentRef} className="bg-background text-foreground p-1 rounded-md border border-input">
-          <ScrollArea className="h-[600px] overflow-y-auto p-1"> 
+        <ScrollArea className="h-[600px] overflow-y-auto p-1"> 
             <div ref={scrollAreaViewportRef} className="space-y-1"> 
               {allSectionsInOrderForHtml.map((section) => { 
                 const sectionHtmlId = section.id || `html-display-section-${Math.random().toString(36).substr(2, 9)}`; 
@@ -646,9 +655,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
               )}
             </div> 
           </ScrollArea>
-        </div>
       </CardContent>
     </Card>
   );
 }
     
+
