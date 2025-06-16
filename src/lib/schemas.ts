@@ -42,7 +42,17 @@ export type RegisterFormInput = z.infer<typeof RegisterFormSchema>;
 
 export const ProfileEditSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters.").max(100),
-  // Add other editable fields here if needed in the future, e.g., password change
 });
 
 export type ProfileEditInput = z.infer<typeof ProfileEditSchema>;
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required."), // Min 1 as we don't enforce length for old passwords
+  newPassword: z.string().min(6, "New password must be at least 6 characters."),
+  confirmNewPassword: z.string().min(6, "New password must be at least 6 characters."),
+}).refine(data => data.newPassword === data.confirmNewPassword, {
+  message: "New passwords don't match.",
+  path: ["confirmNewPassword"],
+});
+
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;

@@ -9,9 +9,10 @@ import {
   logoutUser as apiLogoutUser,
   getCurrentUser as apiGetCurrentUser,
   updateUserProfile as apiUpdateUserProfile,
+  changeUserPassword as apiChangeUserPassword,
   type User,
 } from "@/lib/auth";
-import type { RegisterFormInput, LoginFormInput, ProfileEditInput } from "@/lib/schemas";
+import type { RegisterFormInput, LoginFormInput, ProfileEditInput, ChangePasswordInput } from "@/lib/schemas";
 import { useRouter } from "next/navigation";
 
 interface AuthContextType {
@@ -21,6 +22,7 @@ interface AuthContextType {
   register: (data: RegisterFormInput) => Promise<User | null>;
   logout: () => void;
   updateProfile: (data: ProfileEditInput) => Promise<User | null>;
+  changePassword: (data: ChangePasswordInput) => Promise<void>;
   fetchCurrentUser: () => void;
 }
 
@@ -36,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const user = apiGetCurrentUser();
     setCurrentUser(user);
     setIsLoading(false);
-  }, [setIsLoading, setCurrentUser]); // Explicitly list stable setters, apiGetCurrentUser is stable import
+  }, [setIsLoading, setCurrentUser]); 
 
   useEffect(() => {
     fetchCurrentUser();
@@ -59,11 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const user = apiRegisterUser(data);
-      // Optionally log in user immediately after registration
-      // const loggedInUser = apiLoginUser({ email: data.email, password: data.password });
-      // setCurrentUser(loggedInUser);
       setIsLoading(false);
-      return user; // Return the registered user (without password)
+      return user; 
     } catch (error) {
       setIsLoading(false);
       throw error;
@@ -89,9 +88,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
   };
+
+  const changePassword = async (data: ChangePasswordInput): Promise<void> => {
+    if (!currentUser) throw new Error("No user logged in to change password.");
+    setIsLoading(true);
+    try {
+      apiChangeUserPassword(currentUser.email, data);
+      // No need to update currentUser object here as password is not stored in it
+      setIsLoading(false);
+    } catch (error) {
+      setIsLoading(false);
+      throw error;
+    }
+  };
   
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, updateProfile, fetchCurrentUser }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, updateProfile, changePassword, fetchCurrentUser }}>
       {children}
     </AuthContext.Provider>
   );

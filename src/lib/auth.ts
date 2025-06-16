@@ -1,7 +1,7 @@
 // src/lib/auth.ts
 "use client";
 
-import type { RegisterFormInput, LoginFormInput, ProfileEditInput } from "./schemas";
+import type { RegisterFormInput, LoginFormInput, ProfileEditInput, ChangePasswordInput } from "./schemas";
 
 const USERS_STORAGE_KEY = "wanderai_users";
 const CURRENT_USER_EMAIL_KEY = "wanderai_currentUserEmail";
@@ -92,6 +92,24 @@ export function updateUserProfile(email: string, data: ProfileEditInput): User |
   const { password, ...userWithoutPassword } = updatedUser;
   return userWithoutPassword;
 }
+
+export function changeUserPassword(email: string, data: ChangePasswordInput): void {
+  const users = getUsers();
+  const userIndex = users.findIndex(u => u.email === email);
+
+  if (userIndex === -1) {
+    throw new Error("User not found.");
+  }
+
+  const user = users[userIndex];
+  if (user.password !== data.currentPassword) {
+    throw new Error("Incorrect current password.");
+  }
+
+  users[userIndex] = { ...user, password: data.newPassword };
+  saveUsers(users);
+}
+
 
 export function isUserLoggedIn(): boolean {
   if (typeof window === "undefined") return false;
