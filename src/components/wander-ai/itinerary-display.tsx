@@ -297,81 +297,101 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           backgroundColor: '#ffffff', 
           windowHeight: itineraryContentRef.current.scrollHeight,
           windowWidth: itineraryContentRef.current.scrollWidth,
-          scrollY: 0, // Capture from the top
+          scrollY: 0, 
         });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const imgProps = pdf.getImageProperties(imgData);
         
-        const pdfMargin = 10; // Margin for content
-        const pdfWidth = pdf.internal.pageSize.getWidth() - 2 * pdfMargin;
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width; // Total height of the scaled image strip
+        const ptToMm = (pt: number) => pt * 0.352778;
 
-        const pageRenderableHeight = pdf.internal.pageSize.getHeight() - 2 * pdfMargin; // Usable height per page for the image
+        // Overall Margin for the image content on the page
+        const contentPageMargin = 10; // mm 
 
-        let currentImagePartY = 0; // Tracks the Y-offset in the source image (canvas)
+        // Calculate width for the image on the PDF page
+        const imageStripWidth_onPage = pdf.internal.pageSize.getWidth() - 2 * contentPageMargin;
+        // Calculate total scaled height of the entire image strip if rendered at imageStripWidth_onPage
+        const totalImageStripHeight_pdf_units = (imgProps.height * imageStripWidth_onPage) / imgProps.width;
+
+        let currentImagePartY_src_pixels = 0; // Tracks the Y-offset in the source image (canvas pixels)
         let pageNumber = 0;
 
-        while (currentImagePartY < imgProps.height) {
+        while (currentImagePartY_src_pixels < imgProps.height) {
           if (pageNumber > 0) {
             pdf.addPage();
           }
           pageNumber++;
 
-          // ---- START PDF HEADER ----
-          const pageWidth = pdf.internal.pageSize.getWidth();
-          const headerMargin = 10; 
+          const currentPageWidth = pdf.internal.pageSize.getWidth(); // e.g., 210mm for A4
+          const currentPageHeight = pdf.internal.pageSize.getHeight(); // e.g., 297mm for A4
 
-          const logoChar = "✈"; 
+          // ---- START PDF HEADER ----
+          const headerSideMargin = 10; // mm from side edges for text
+          const headerTopMargin = 10; // mm from top edge for text
+
+          const logoChar = "✈";
           const appNameText = "WanderAI";
           const taglineText = "Your Personal AI Travel Planner";
 
-          const appNameFontSize = 14; 
-          const taglineFontSize = 7;
-          const logoFontSize = 14;
-
-          // App Name
-          pdf.setFont("Helvetica", "bold"); 
-          pdf.setFontSize(appNameFontSize);
-          pdf.setTextColor(135, 206, 235); // Sky Blue (Primary Color #87CEEB)
-
-          const appNameWidth = pdf.getStringUnitWidth(appNameText) * appNameFontSize / pdf.internal.scaleFactor;
-          const appNameX = pageWidth - headerMargin - appNameWidth;
-          const appNameY = headerMargin + appNameFontSize * 0.7; 
-          pdf.text(appNameText, appNameX, appNameY);
-
-          // Tagline
-          pdf.setFont("Helvetica", "normal");
-          pdf.setFontSize(taglineFontSize);
-          pdf.setTextColor(105, 105, 105); // Dim Gray for tagline (muted)
-
-          const taglineTextWidth = pdf.getStringUnitWidth(taglineText) * taglineFontSize / pdf.internal.scaleFactor;
-          const taglineX = pageWidth - headerMargin - taglineTextWidth;
-          const taglineY = appNameY + taglineFontSize + 1; 
-          pdf.text(taglineText, taglineX, taglineY);
-
-          // Logo Character
-          pdf.setFont("Helvetica", "normal"); 
-          pdf.setFontSize(logoFontSize);
+          const appNameFontSizePt = 14;
+          const taglineFontSizePt = 7;
+          const logoFontSizePt = 14;
+          
+          pdf.setFont("Helvetica", "bold");
+          pdf.setFontSize(appNameFontSizePt);
           pdf.setTextColor(135, 206, 235); // Sky Blue
 
-          const logoCharWidth = pdf.getStringUnitWidth(logoChar) * logoFontSize / pdf.internal.scaleFactor;
-          const logoX = appNameX - logoCharWidth - 2; // 2 units space
-          pdf.text(logoChar, logoX, appNameY); 
+          const appNameWidthMm = pdf.getStringUnitWidth(appNameText) * appNameFontSizePt / pdf.internal.scaleFactor;
+          const appNameX_mm = currentPageWidth - headerSideMargin - appNameWidthMm;
+          const appNameBaselineY_mm = headerTopMargin + ptToMm(appNameFontSizePt * 0.75); // Baseline from top
+          pdf.text(appNameText, appNameX_mm, appNameBaselineY_mm);
 
-          pdf.setTextColor(0, 0, 0); // Reset to black
+          pdf.setFont("Helvetica", "normal");
+          pdf.setFontSize(taglineFontSizePt);
+          pdf.setTextColor(105, 105, 105); // Dim Gray
+
+          const taglineTextWidthMm = pdf.getStringUnitWidth(taglineText) * taglineFontSizePt / pdf.internal.scaleFactor;
+          const taglineX_mm = currentPageWidth - headerSideMargin - taglineTextWidthMm;
+          const taglineBaselineY_mm = appNameBaselineY_mm + ptToMm(taglineFontSizePt) + ptToMm(2); // Tagline below app name
+          pdf.text(taglineText, taglineX_mm, taglineBaselineY_mm);
+
+          pdf.setFont("Helvetica", "normal");
+          pdf.setFontSize(logoFontSizePt);
+          pdf.setTextColor(135, 206, 235); // Sky Blue
+          
+          const logoCharWidthMm = pdf.getStringUnitWidth(logoChar) * logoFontSizePt / pdf.internal.scaleFactor;
+          const logoX_mm = appNameX_mm - logoCharWidthMm - ptToMm(2); 
+          pdf.text(logoChar, logoX_mm, appNameBaselineY_mm);
+          
+          const headerBottomY_mm = taglineBaselineY_mm + ptToMm(taglineFontSizePt * 0.25); // Approx bottom of header
+          const contentStartY_onPage = headerBottomY_mm + 3; // 3mm gap below header
           // ---- END PDF HEADER ----
-          
-          // The y-position for the image strip on the PDF page.
-          // For the first page, it starts at pdfMargin. For subsequent pages, it's negative to "scroll" the image up.
-          const yPositionOnPdfPage = pdfMargin - (currentImagePartY / imgProps.height * pdfHeight);
 
-          pdf.addImage(imgData, 'PNG', pdfMargin, yPositionOnPdfPage, pdfWidth, pdfHeight);
-          
-          // Calculate how much of the source image's height corresponds to one PDF page's renderable height
-          currentImagePartY += (pageRenderableHeight / pdfHeight) * imgProps.height;
+          pdf.setTextColor(0, 0, 0); // Reset text color
 
-          if (pageNumber > 50) { // Safety break for very long content
+          // Calculate how much of the PDF page height is available for the image content
+          const pageRenderableHeight_for_image = currentPageHeight - contentStartY_onPage - contentPageMargin; // Space from below header to bottom margin
+
+          // y_offset_for_image_strip is where the top of the *entire* imgData is placed on *this* PDF page.
+          // It's scrolled up (negative adjustment) for subsequent pages.
+          const scrollAmount_pdf_units = (currentImagePartY_src_pixels / imgProps.height) * totalImageStripHeight_pdf_units;
+          const y_offset_for_image_strip = contentStartY_onPage - scrollAmount_pdf_units;
+
+          pdf.addImage(imgData, 'PNG',
+            contentPageMargin, // X position for the image strip
+            y_offset_for_image_strip,
+            imageStripWidth_onPage,
+            totalImageStripHeight_pdf_units
+          );
+          
+          // Advance currentImagePartY_src_pixels based on how much of the source image corresponds to pageRenderableHeight_for_image
+          if (totalImageStripHeight_pdf_units > 0) {
+            currentImagePartY_src_pixels += (pageRenderableHeight_for_image / totalImageStripHeight_pdf_units) * imgProps.height;
+          } else {
+            currentImagePartY_src_pixels = imgProps.height; // Stop if total height is 0
+          }
+
+          if (pageNumber > 50) { 
             toast({ title: "Warning", description: "PDF export truncated due to excessive length.", variant: "destructive" });
             break;
           }
@@ -385,7 +405,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       } finally {
         setIsExportingPdf(false);
       }
-    }, 300); // Delay to allow UI to update for full height capture if ScrollArea class changes
+    }, 300); 
   };
 
 
