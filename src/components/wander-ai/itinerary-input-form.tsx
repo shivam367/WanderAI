@@ -10,14 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ItineraryInputSchema, type ItineraryInput } from "@/lib/schemas";
-import { generateItinerary, type GenerateItineraryInput as AIInputType } from "@/ai/flows/generate-itinerary"; // Renamed to avoid conflict
-import { Wand2, MapPin, Sparkles, DollarSign, Wallet, CalendarDays } from "lucide-react";
+import { generateItinerary, type GenerateItineraryInput as AIInputType } from "@/ai/flows/generate-itinerary";
+import { Wand2, MapPin, Sparkles, DollarSign, Wallet, CalendarDays, CheckCircle, Circle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import type React from "react";
+import { useState, useEffect } from "react";
 
 interface ItineraryInputFormProps {
-  onItineraryGenerated: (itinerary: string, inputDetails: ItineraryInput) => void; // Pass inputDetails
+  onItineraryGenerated: (itinerary: string, inputDetails: ItineraryInput) => void;
   setIsLoading: (loading: boolean) => void;
   isLoading: boolean;
 }
@@ -33,6 +34,13 @@ const currencyOptions = [
   { value: "INR", label: "INR - Indian Rupee" },
 ];
 
+const commonInterests = [
+  "Museums", "Historical Sites", "Local Cuisine", "Shopping", "Nightlife",
+  "Beaches", "Mountains", "Hiking", "Water Sports", "Photography",
+  "Art & Culture", "Relaxation", "Adventure Sports", "Wildlife Safari",
+  "Yoga & Wellness", "Cooking Classes", "Live Music", "Theme Parks"
+];
+
 export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoading }: ItineraryInputFormProps) {
   const { toast } = useToast();
   const form = useForm<ItineraryInput>({
@@ -46,10 +54,44 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
     },
   });
 
+  const [selectedChips, setSelectedChips] = useState<Set<string>>(new Set());
+
+  // Sync textarea with chip selections
+  useEffect(() => {
+    const interestsArray = Array.from(selectedChips);
+    form.setValue("interests", interestsArray.join(", "), { shouldValidate: true });
+  }, [selectedChips, form]);
+
+  // Sync chip selections with textarea (e.g., if user types manually or pastes)
+  const watchedInterests = form.watch("interests");
+  useEffect(() => {
+    if (typeof watchedInterests === 'string') {
+      const interestsArray = watchedInterests.split(',').map(item => item.trim()).filter(item => item.length > 0);
+      const newSelectedChips = new Set(interestsArray.filter(interest => commonInterests.includes(interest)));
+      // Only update if different to avoid infinite loop
+      if (newSelectedChips.size !== selectedChips.size || !Array.from(newSelectedChips).every(chip => selectedChips.has(chip))) {
+        setSelectedChips(newSelectedChips);
+      }
+    }
+  }, [watchedInterests, selectedChips]);
+
+
+  const handleChipToggle = (interest: string) => {
+    setSelectedChips(prevSelectedChips => {
+      const newSelectedChips = new Set(prevSelectedChips);
+      if (newSelectedChips.has(interest)) {
+        newSelectedChips.delete(interest);
+      } else {
+        newSelectedChips.add(interest);
+      }
+      return newSelectedChips;
+    });
+  };
+
   const onSubmit: SubmitHandler<ItineraryInput> = async (data) => {
     setIsLoading(true);
     try {
-      const aiInput: AIInputType = { // Use renamed AIInputType
+      const aiInput: AIInputType = {
         destination: data.destination,
         interests: data.interests,
         currency: data.currency,
@@ -57,7 +99,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
         duration: Number(data.duration),
       };
       const result = await generateItinerary(aiInput);
-      onItineraryGenerated(result.itinerary, data); // Pass form data 'data' as inputDetails
+      onItineraryGenerated(result.itinerary, data);
     } catch (error) {
       console.error("Error generating itinerary:", error);
       toast({
@@ -65,7 +107,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
         description: (error as Error).message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
-       onItineraryGenerated("", form.getValues()); // Pass current form values even on error
+      onItineraryGenerated("", form.getValues());
     } finally {
       setIsLoading(false);
     }
@@ -103,14 +145,48 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
               name="interests"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center font-body"><Sparkles className="mr-2 h-4 w-4 text-primary" />Interests & Activities</FormLabel>
+                  <FormLabel className="flex items-center font-body mb-2"><Sparkles className="mr-2 h-4 w-4 text-primary" />Interests & Activities</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="e.g., Museums, local cuisine, hiking, photography" {...field} className="font-body min-h-[100px]" />
+                    <Textarea
+                      placeholder="e.g., Museums, local cuisine, hiking, photography. Or select from below."
+                      {...field}
+                      className="font-body min-h-[80px]"
+                    />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="pt-1"/>
                 </FormItem>
               )}
             />
+
+            <div className="space-y-2">
+                <FormLabel className="text-sm font-medium text-muted-foreground font-body flex items-center">
+                    Or tap to add common interests:
+                </FormLabel>
+                <div className="flex flex-wrap gap-2">
+                    {commonInterests.map((interest) => {
+                    const isSelected = selectedChips.has(interest);
+                    return (
+                        <Button
+                        key={interest}
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleChipToggle(interest)}
+                        className={`font-body transition-all duration-150 ease-in-out rounded-full px-3 py-1 h-auto text-xs
+                                    ${isSelected
+                                        ? 'bg-accent text-accent-foreground border-accent hover:bg-accent/90'
+                                        : 'border-input hover:bg-secondary/70'
+                                    }`}
+                        >
+                        {isSelected ? <CheckCircle className="mr-1.5 h-3.5 w-3.5" /> : <Circle className="mr-1.5 h-3.5 w-3.5 text-transparent group-hover:text-muted-foreground" />}
+                        {interest}
+                        </Button>
+                    );
+                    })}
+                </div>
+            </div>
+
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <FormField
                 control={form.control}
