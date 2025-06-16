@@ -46,6 +46,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
   const { toast } = useToast();
   const form = useForm<ItineraryInput>({
     resolver: zodResolver(ItineraryInputSchema),
+    mode: 'onTouched', // Validate on touched or on submit
     defaultValues: {
       destination: "",
       interests: "",
@@ -70,12 +71,14 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
   const watchedInterests = form.watch("interests");
   useEffect(() => {
     if (typeof watchedInterests === 'string') {
-      const interestsArray = watchedInterests.split(',').map(item => item.trim()).filter(item => item.length > 0);
-      const newSelectedChipsFromText = new Set(interestsArray.filter(interest => commonInterests.includes(interest)));
+      const interestsArrayFromText = watchedInterests.split(',').map(item => item.trim()).filter(item => item.length > 0);
+      const newSelectedChipsFromText = new Set(interestsArrayFromText.filter(interest => commonInterests.includes(interest)));
 
       setSelectedChips(prevSelectedChips => {
+        // Compare contents of the sets
         const contentsAreEqual = newSelectedChipsFromText.size === prevSelectedChips.size &&
                                  Array.from(newSelectedChipsFromText).every(chip => prevSelectedChips.has(chip));
+        
         if (contentsAreEqual) {
           return prevSelectedChips; // Return the same Set instance to prevent re-render
         } else {
