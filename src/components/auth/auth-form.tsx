@@ -13,10 +13,15 @@ import { Lock, Mail, User, LogIn } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { LoadingSpinner } from "../common/loading-spinner";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 
 export function AuthForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("login");
+  const { login, register } = useAuth();
+  const router = useRouter();
 
   const loginForm = useForm<LoginFormInput>({
     resolver: zodResolver(LoginFormSchema),
@@ -30,20 +35,32 @@ export function AuthForm() {
 
   const onLoginSubmit: SubmitHandler<LoginFormInput> = async (data) => {
     setIsLoading(true);
-    console.log("Login data:", data);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    toast({ title: "Login Attempt", description: "Login functionality is illustrative." });
-    setIsLoading(false);
+    try {
+      await login(data);
+      toast({ title: "Login Successful", description: "Welcome back!", className: "bg-primary text-primary-foreground" });
+      router.push("/dashboard");
+    } catch (error: any) {
+      toast({ title: "Login Failed", description: error.message, variant: "destructive" });
+      if (error.message.includes("User not found")) {
+        setActiveTab("register"); // Switch to register tab
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onRegisterSubmit: SubmitHandler<RegisterFormInput> = async (data) => {
     setIsLoading(true);
-    console.log("Register data:", data);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    toast({ title: "Registration Attempt", description: "Registration functionality is illustrative." });
-    setIsLoading(false);
+    try {
+      await register(data);
+      toast({ title: "Registration Successful", description: "Please log in to continue.", className: "bg-primary text-primary-foreground" });
+      registerForm.reset();
+      setActiveTab("login"); // Switch to login tab after successful registration
+    } catch (error: any) {
+      toast({ title: "Registration Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -53,7 +70,7 @@ export function AuthForm() {
         <CardDescription className="font-body">Access your personalized travel plans or create a new account.</CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="login" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 bg-secondary/70">
             <TabsTrigger value="login" className="font-body data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Login</TabsTrigger>
             <TabsTrigger value="register" className="font-body data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Register</TabsTrigger>
