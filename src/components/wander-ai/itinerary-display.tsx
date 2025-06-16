@@ -2,7 +2,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,10 +11,16 @@ import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { RefineItineraryInputSchema, type RefineItineraryInput as RefineFormInputType } from "@/lib/schemas";
 import { refineItinerary, type RefineItineraryInput } from "@/ai/flows/refine-itinerary";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2 } from "lucide-react";
+import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download } from "lucide-react";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+// Fallback icon defined before its use
+const CalendarDays = ({className}: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
 interface ItineraryDisplayProps {
   itinerary: string | null;
@@ -29,10 +35,8 @@ interface Section {
   title: string;
   icon: React.ElementType;
   content: string[];
+  isDaySection?: boolean;
 }
-
-// Fallback icon defined before its use
-const CalendarDays = ({className}: {className: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
 function parseItinerary(itineraryText: string): Section[] {
   const sections: Section[] = [];
@@ -40,8 +44,8 @@ function parseItinerary(itineraryText: string): Section[] {
 
   let currentSection: Section | null = null;
 
-  const sectionKeywords: Record<string, { title: string, icon: React.ElementType }> = {
-    "Day \\d+": { title: "Day {N}", icon: CalendarDays }, // Placeholder for dynamic day
+  const sectionKeywords: Record<string, { title: string, icon: React.ElementType, isDayKeyword?: boolean }> = {
+    "Day \\d+": { title: "Day {N}", icon: CalendarDays, isDayKeyword: true },
     "Activities": { title: "Activities & Attractions", icon: MountainSnow },
     "Attractions": { title: "Activities & Attractions", icon: MountainSnow },
     "Food Recommendations": { title: "Food Recommendations", icon: Utensils },
@@ -51,24 +55,28 @@ function parseItinerary(itineraryText: string): Section[] {
     "Hotels": { title: "Hotel Suggestions", icon: BedDouble },
     "Local Tips": { title: "Local Tips & Advice", icon: Lightbulb },
     "Tips": { title: "Local Tips & Advice", icon: Lightbulb },
-    "Transportation": { title: "Transportation", icon: Building2 } // Using Building2 as placeholder
+    "Transportation": { title: "Transportation", icon: Building2 }
   };
-
+  
   lines.forEach(line => {
     let matchedKeyword = false;
     for (const keyword in sectionKeywords) {
-      const regex = new RegExp(`^${keyword}:?`, "i");
+      const regex = new RegExp(`^(${keyword.replace("Day \\d+", "Day \\d+.*")}):?`, "i");
       const match = line.match(regex);
       if (match) {
         if (currentSection) {
           sections.push(currentSection);
         }
         let title = sectionKeywords[keyword].title;
-        if (keyword === "Day \\d+") {
-          title = line.replace(/:$/, ''); // Use the matched line as title, e.g., "Day 1 Activities"
+        if (sectionKeywords[keyword].isDayKeyword) {
+          title = match[1].replace(/:$/, '').trim(); // Use the matched line as title, e.g., "Day 1 - Arrival"
         }
-        currentSection = { title: title, icon: sectionKeywords[keyword].icon, content: [] };
-         // Add text after colon if any
+        currentSection = { 
+          title: title, 
+          icon: sectionKeywords[keyword].icon, 
+          content: [],
+          isDaySection: !!sectionKeywords[keyword].isDayKeyword 
+        };
         const contentAfterColon = line.substring(match[0].length).trim();
         if (contentAfterColon) {
           currentSection.content.push(contentAfterColon);
@@ -79,14 +87,13 @@ function parseItinerary(itineraryText: string): Section[] {
     }
 
     if (!matchedKeyword && currentSection) {
-      currentSection.content.push(line);
+      currentSection.content.push(line.trim());
     } else if (!matchedKeyword && !currentSection) {
-      // Lines before any keyword, treat as intro or part of a general section
       if (sections.length === 0 || sections[sections.length-1].title !== "Overview") {
          if (currentSection) sections.push(currentSection);
         currentSection = { title: "Overview", icon: BookOpenText, content: [] };
       }
-      currentSection!.content.push(line);
+      currentSection!.content.push(line.trim());
     }
   });
 
@@ -95,17 +102,18 @@ function parseItinerary(itineraryText: string): Section[] {
   }
   
   if (sections.length === 0 && itineraryText.trim() !== "") {
-    // If no keywords found but there is text, put it all in an overview
     sections.push({ title: "Generated Itinerary", icon: BookOpenText, content: itineraryText.split('\n').filter(l => l.trim() !== '') });
   }
 
-  return sections;
+  return sections.filter(section => section.content.some(line => line.trim() !== ''));
 }
 
 
 export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefining, onItineraryRefined, error }: ItineraryDisplayProps) {
   const { toast } = useToast();
   const [showRefineForm, setShowRefineForm] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const itineraryContentRef = useRef<HTMLDivElement>(null);
 
   const refineForm = useForm<RefineFormInputType>({
     resolver: zodResolver(RefineItineraryInputSchema),
@@ -125,8 +133,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       };
       const result = await refineItinerary(aiInput);
       onItineraryRefined(result.refinedItinerary);
-      setShowRefineForm(false); // Hide form after successful refinement
-      refineForm.reset(); // Reset form fields
+      setShowRefineForm(false); 
+      refineForm.reset(); 
       toast({ title: "Itinerary Refined!", description: "Your updated itinerary is ready.", className: "bg-primary text-primary-foreground" });
     } catch (err) {
       console.error("Error refining itinerary:", err);
@@ -137,6 +145,47 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       });
     } finally {
       setIsRefining(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!itineraryContentRef.current) {
+      toast({ title: "Error", description: "Could not find itinerary content to export.", variant: "destructive"});
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      const canvas = await html2canvas(itineraryContentRef.current, { 
+        scale: 2, // Higher scale for better quality
+        useCORS: true, // If you have external images
+        backgroundColor: '#ffffff', // Explicitly set background to white
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth() - 20; // With margin
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const pageHeight = pdf.internal.pageSize.getHeight() - 20; // With margin
+      
+      let heightLeft = pdfHeight;
+      let position = 10; // Top margin
+
+      pdf.addImage(imgData, 'PNG', 10, position, pdfWidth, pdfHeight); // Left margin 10
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - pdfHeight + 10; // Adjust position for subsequent pages
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 10, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+      pdf.save('wanderai-itinerary.pdf');
+      toast({ title: "Export Successful", description: "Your itinerary has been downloaded as a PDF.", className: "bg-primary text-primary-foreground" });
+    } catch (err) {
+      console.error("Error exporting PDF:", err);
+      toast({ title: "PDF Export Error", description: (err as Error).message || "Could not export itinerary to PDF.", variant: "destructive"});
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -151,69 +200,78 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   if (error) {
     return (
       <Card className="mt-8 w-full max-w-3xl mx-auto bg-destructive/10 border-destructive animate-fade-in">
-        <CardHeader>
-          <CardTitle className="text-destructive font-headline">Error</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-destructive-foreground font-body">{error}</p>
-        </CardContent>
+        <CardHeader><CardTitle className="text-destructive font-headline">Error</CardTitle></CardHeader>
+        <CardContent><p className="text-destructive-foreground font-body">{error}</p></CardContent>
       </Card>
     );
   }
 
-  if (!itinerary) {
-    return null; // Don't render anything if there's no itinerary and not loading/error
-  }
+  if (!itinerary) return null;
 
   const parsedSections = parseItinerary(itinerary);
+  const daySections = parsedSections.filter(s => s.isDaySection);
+  const otherSections = parsedSections.filter(s => !s.isDaySection);
+
+  const renderContent = (contentLines: string[]) => {
+    const listItems: string[] = [];
+    const otherContent: string[] = [];
+    contentLines.forEach(line => {
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        listItems.push(line.substring(2).trim());
+      } else if (line.trim()) {
+        otherContent.push(line.trim());
+      }
+    });
+
+    return (
+      <div className="space-y-2">
+        {otherContent.map((line, idx) => <p key={`p-${idx}`} className="text-foreground/90 font-body leading-relaxed whitespace-pre-line">{line}</p>)}
+        {listItems.length > 0 && (
+          <ul className="list-disc list-inside pl-2 space-y-1 font-body text-foreground/90">
+            {listItems.map((item, idx) => <li key={`li-${idx}`}>{item}</li>)}
+          </ul>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Card className="mt-12 w-full max-w-4xl mx-auto shadow-xl animate-slide-in-up bg-card/90 backdrop-blur-sm">
-      <CardHeader className="flex flex-row justify-between items-center">
+      <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <CardTitle className="text-3xl font-headline text-primary flex items-center gap-2">
             <BookOpenText className="h-8 w-8" />
             Your Custom Itinerary
           </CardTitle>
-          <CardDescription className="font-body">Here's your AI-generated travel plan. Review and refine it as needed!</CardDescription>
+          <CardDescription className="font-body">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
         </div>
-        <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10">
-          <Edit3 className="mr-2 h-4 w-4" /> {showRefineForm ? "Cancel Refinement" : "Refine Itinerary"}
-        </Button>
+        <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
+          <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isExportingPdf}>
+            <Edit3 className="mr-2 h-4 w-4" /> {showRefineForm ? "Cancel Refine" : "Refine Itinerary"}
+          </Button>
+          <Button onClick={handleExportPdf} variant="outline" className="text-primary border-primary hover:bg-primary/10 font-body w-full sm:w-auto" disabled={isExportingPdf || isRefining}>
+            {isExportingPdf ? <LoadingSpinner size={20} /> : <><Download className="mr-2 h-4 w-4" /> Export to PDF</>}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {showRefineForm && (
           <Card className="mb-6 bg-secondary/50 p-2 sm:p-4 md:p-6 animate-fade-in">
             <CardHeader>
-              <CardTitle className="font-headline text-xl text-primary flex items-center gap-2">
-                <Sparkles className="h-6 w-6"/>
-                Refine Your Itinerary
-              </CardTitle>
-              <CardDescription className="font-body">
-                Provide feedback on what you'd like to change or add.
-              </CardDescription>
+              <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Sparkles className="h-6 w-6"/>Refine Your Itinerary</CardTitle>
+              <CardDescription className="font-body">Provide feedback on what you'd like to change or add.</CardDescription>
             </CardHeader>
             <CardContent>
               <Form {...refineForm}>
                 <form onSubmit={refineForm.handleSubmit(onRefineSubmit)} className="space-y-4">
-                  <FormField
-                    control={refineForm.control}
-                    name="userFeedback"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="font-body">Your Feedback</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="e.g., 'Add more vegetarian food options', 'Include a visit to Eiffel Tower on Day 2', 'Suggest budget-friendly hotels'"
-                            {...field}
-                            className="min-h-[120px] font-body"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground font-body" disabled={isRefining}>
+                  <FormField control={refineForm.control} name="userFeedback" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-body">Your Feedback</FormLabel>
+                      <FormControl><Textarea placeholder="e.g., 'Add more vegetarian food options', 'Include a visit to Eiffel Tower on Day 2'" {...field} className="min-h-[120px] font-body" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground font-body" disabled={isRefining || isExportingPdf}>
                     {isRefining ? <LoadingSpinner size={20} /> : "Submit Feedback"}
                   </Button>
                 </form>
@@ -222,30 +280,54 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           </Card>
         )}
         
-        {isRefining && !showRefineForm && ( // Show this if refining is in progress but form is hidden (e.g. after submission)
-           <div className="my-6 flex justify-center items-center min-h-[100px]">
-             <LoadingSpinner size={32} text="Refining your itinerary..." />
-           </div>
+        {(isRefining && !showRefineForm) && (
+           <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
         )}
 
-        <ScrollArea className="h-[600px] p-1 rounded-md">
-          <div className="space-y-6 pr-4">
-            {parsedSections.map((section, idx) => (
-              <div key={idx} className="mb-4 p-4 border border-border rounded-lg shadow-sm bg-background">
-                <h3 className="text-xl font-headline font-semibold text-primary mb-2 flex items-center">
+        <ScrollArea className="h-[600px] p-1 rounded-md border">
+          <div ref={itineraryContentRef} className="p-4 bg-white"> {/* Added bg-white for html2canvas */}
+            {otherSections.map((section, idx) => (
+              <div key={`other-${idx}`} className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
+                <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
                   <section.icon className="mr-3 h-6 w-6 text-primary/80" />
                   {section.title}
                 </h3>
-                {section.content.map((line, lineIdx) => (
-                  <p key={lineIdx} className="text-foreground/90 font-body mb-1 leading-relaxed whitespace-pre-line">
-                    {line.startsWith('- ') || line.startsWith('* ') ? `• ${line.substring(2)}` : line}
-                  </p>
-                ))}
+                {renderContent(section.content)}
               </div>
             ))}
+
+            {daySections.length > 0 && (
+              <Accordion type="multiple" className="w-full" defaultValue={daySections.map((_,idx) => `day-${idx}`)}>
+                {daySections.map((section, idx) => (
+                  <AccordionItem value={`day-${idx}`} key={`day-${idx}`} className="mb-2 border-b-0">
+                     <Card className="shadow-sm">
+                        <AccordionTrigger className="p-4 hover:no-underline">
+                          <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
+                            <section.icon className="mr-3 h-6 w-6 text-primary/80" />
+                            {section.title}
+                          </h3>
+                        </AccordionTrigger>
+                        <AccordionContent className="p-4 pt-0">
+                          {renderContent(section.content)}
+                        </AccordionContent>
+                     </Card>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
+            {daySections.length === 0 && otherSections.length === 0 && (
+                 <div className="mb-6 p-4 border border-border rounded-lg shadow-sm bg-background">
+                    <h3 className="text-xl font-headline font-semibold text-primary mb-3 flex items-center">
+                        <BookOpenText className="mr-3 h-6 w-6 text-primary/80" />
+                        Generated Itinerary
+                    </h3>
+                    {renderContent(itinerary.split('\n'))}
+                 </div>
+            )}
           </div>
         </ScrollArea>
       </CardContent>
     </Card>
   );
 }
+
