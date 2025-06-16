@@ -101,12 +101,16 @@ function parseItinerary(itineraryText: string): Section[] {
 
     if (!isNewPrimarySectionStart) {
       if (!currentSection) {
+        // Try to assign an ID to the initial non-day, non-overview block if it exists
+        const introId = `pdf-section-intro-${sectionCounter}`;
         currentSection = {
-          title: currentPrimaryTitle, 
+          title: currentPrimaryTitle, // "Introduction"
           icon: BookOpenText, 
           content: [line],
           isDaySection: false, 
         };
+         // We don't push here yet, might be more intro lines.
+         // If the next line is a Day/Overview, this currentSection will be pushed.
       } else {
         currentSection.content.push(line);
       }
@@ -114,13 +118,31 @@ function parseItinerary(itineraryText: string): Section[] {
   });
 
   if (currentSection) {
-     parsedSections.push({...currentSection, id: `pdf-section-${sectionCounter++}`});
+     // If the last section was an intro, ensure its ID is unique if not already set by counter
+     const finalId = currentSection.title === "Introduction" && parsedSections.every(s => s.title !== "Introduction") 
+                     ? `pdf-section-intro-${sectionCounter++}` 
+                     : `pdf-section-${sectionCounter++}`;
+     parsedSections.push({...currentSection, id: finalId});
   }
   
+  // Ensure "Introduction" section (if it exists and is the first one) has a predictable ID for export
   const introIndex = parsedSections.findIndex(s => s.title === "Introduction" && !s.isDaySection);
-  if (introIndex !== -1 && parsedSections.some(s => s.title === "Overview")) {
-    if (parsedSections[introIndex].content.every(c => c.trim() === '')) {
-      parsedSections.splice(introIndex, 1);
+  if (introIndex === 0 && parsedSections[introIndex].id.startsWith('pdf-section-') && !parsedSections[introIndex].id.includes('-intro-')) {
+    parsedSections[introIndex].id = `pdf-section-intro-${parsedSections[introIndex].id.split('-').pop()}`;
+  } else if (introIndex === -1 && parsedSections.length > 0 && !parsedSections[0].isDaySection && parsedSections[0].title !== "Overview") {
+    // If no explicit "Introduction" title but there's content before Overview/Day 1
+    if (!parsedSections[0].id.includes('-intro-')) {
+        parsedSections[0].id = `pdf-section-intro-implicit-${parsedSections[0].id.split('-').pop()}`;
+    }
+    parsedSections[0].title = "Introduction"; // Label it as Introduction
+    parsedSections[0].icon = BookOpenText;
+  }
+  
+  // Remove empty introduction sections if an overview exists
+  if (parsedSections.some(s => s.title === "Overview")) {
+    const introIdx = parsedSections.findIndex(s => s.title === "Introduction" && s.content.every(c => c.trim() === ''));
+    if (introIdx !== -1) {
+        parsedSections.splice(introIdx, 1);
     }
   }
   
@@ -295,34 +317,39 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     const tempSvgContainer = document.createElement('div');
     tempSvgContainer.id = 'temp-svg-container-for-pdf-export';
     tempSvgContainer.style.position = 'absolute';
-    tempSvgContainer.style.left = '-9999px'; 
+    tempSvgContainer.style.left = '-9999px'; // Off-screen
     tempSvgContainer.style.width = '64px'; 
     tempSvgContainer.style.height = '64px';
     tempSvgContainer.innerHTML = svgLogoString;
     document.body.appendChild(tempSvgContainer);
 
     try {
-      const svgCanvas = await html2canvas(tempSvgContainer, { // Capture the container div
-        scale: 2,
-        backgroundColor: null,
-        width: 64, 
-        height: 64, 
-        logging: false, 
-      });
-      svgDataUrl = svgCanvas.toDataURL('image/png');
+      const svgElementToCapture = tempSvgContainer.querySelector('svg');
+      if (svgElementToCapture) {
+        const svgCanvas = await html2canvas(svgElementToCapture, { // Capture the SVG element itself
+          scale: 2, // Capture at higher resolution for better quality
+          backgroundColor: null, // Transparent background for the logo
+          width: 64, 
+          height: 64, 
+          logging: false, 
+        });
+        svgDataUrl = svgCanvas.toDataURL('image/png');
+      } else {
+        throw new Error("SVG element not found in temporary container.");
+      }
     } catch (e) {
       console.error("Error converting SVG logo to canvas image:", e);
       toast({ title: "PDF Logo Error", description: "Could not render the logo for the PDF. Check console.", variant: "destructive" });
     } finally {
       if (document.body.contains(tempSvgContainer)) {
-        document.body.removeChild(tempSvgContainer);
+          document.body.removeChild(tempSvgContainer);
       }
     }
 
     const LOGO_HEIGHT_MM = 8;
     const LOGO_WIDTH_MM = 8;
     const HEADER_TEXT_SPACING_MM = 2; 
-    const HEADER_TOTAL_HEIGHT_MM = LOGO_HEIGHT_MM + 5; 
+    const HEADER_TOTAL_HEIGHT_MM = LOGO_HEIGHT_MM + 5; // Max height of logo or text + spacing
 
     const FOOTER_LINE_Y_OFFSET_FROM_BOTTOM_MARGIN = 10;
     const FOOTER_TEXT_Y_OFFSET_FROM_BOTTOM_MARGIN = 7;
@@ -334,6 +361,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     const generationTimestamp = format(new Date(), "MMMM d, yyyy 'at' h:mm a");
 
     const drawPageHeaderAndFooter = (currentPageNum: number) => {
+      // Header
       const logoX = PAGE_MARGIN_MM;
       const logoY = PAGE_MARGIN_MM;
       if (svgDataUrl) {
@@ -341,25 +369,26 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           pdf.addImage(svgDataUrl, 'PNG', logoX, logoY, LOGO_WIDTH_MM, LOGO_HEIGHT_MM); 
         } catch (imgError) { 
           console.error("Error adding SVG logo image to PDF page:", imgError); 
-          pdf.setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
+          pdf.setFont("Helvetica", "normal").setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
         }
       } else {
-        pdf.setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
+        pdf.setFont("Helvetica", "normal").setFontSize(8).text("[Logo]", logoX, logoY + LOGO_HEIGHT_MM / 2);
       }
       
       const textStartX = logoX + LOGO_WIDTH_MM + HEADER_TEXT_SPACING_MM;
-      pdf.setFont("Helvetica", "bold"); pdf.setFontSize(12); pdf.setTextColor(135, 206, 235); 
+      pdf.setFont("Helvetica", "bold"); pdf.setFontSize(12); pdf.setTextColor(135, 206, 235); // Primary color #87CEEB
       pdf.text("WanderAI", textStartX, logoY + (LOGO_HEIGHT_MM / 2) - 1); 
       
-      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(105, 105, 105); 
+      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(105, 105, 105); // Muted gray
       pdf.text("Your Personal AI Travel Planner", textStartX, logoY + (LOGO_HEIGHT_MM / 2) + 3); 
-      pdf.setTextColor(0,0,0); 
+      pdf.setTextColor(0,0,0); // Reset to black for other text
 
+      // Footer
       const footerLineY = PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_LINE_Y_OFFSET_FROM_BOTTOM_MARGIN;
-      pdf.setDrawColor(200, 200, 200); 
+      pdf.setDrawColor(200, 200, 200); // Light gray line
       pdf.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH - PAGE_MARGIN_MM, footerLineY);
 
-      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(128, 128, 128); 
+      pdf.setFont("Helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(128, 128, 128); // Gray text
       
       const pageNumText = `Page ${currentPageNum}`;
       const pageNumTextWidth = pdf.getStringUnitWidth(pageNumText) * pdf.getFontSize() / pdf.internal.scaleFactor;
@@ -370,13 +399,12 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       
       const dateTextWidth = pdf.getStringUnitWidth(generationTimestamp) * pdf.getFontSize() / pdf.internal.scaleFactor;
       pdf.text(generationTimestamp, PDF_PAGE_WIDTH - PAGE_MARGIN_MM - dateTextWidth, PDF_PAGE_HEIGHT - PAGE_MARGIN_MM - FOOTER_TEXT_Y_OFFSET_FROM_BOTTOM_MARGIN);
-      pdf.setTextColor(0,0,0); 
+      pdf.setTextColor(0,0,0); // Reset text color
     };
 
     let currentPageNum = 0;
     let currentYOnPage = CONTENT_START_Y_MM; 
-
-    const MAX_PDF_PAGES_PER_SECTION = 20; 
+    const MAX_PDF_PAGES_PER_SECTION = 20; // Safety break
 
     const addContentToPage = async (elementId: string, isFirstSectionOverall: boolean, forceNewPageForThisSection: boolean) => {
       const element = document.getElementById(elementId);
@@ -390,6 +418,9 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       let originalAccordionStyle = '';
       let originalElementDisplay = element.style.display;
       let originalScrollAreaViewportStyle = '';
+      const tempPadding = '20px'; // Added padding to prevent cutting off bottom
+      const originalElementPaddingBottom = element.style.paddingBottom;
+
 
       if (accordionContentParent instanceof HTMLElement) {
           originalAccordionStyle = accordionContentParent.style.cssText;
@@ -399,26 +430,28 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           accordionContentParent.style.setProperty('overflow', 'visible', 'important');
       }
       if (element.classList.contains('radix-accordion-trigger') && element.offsetParent === null) {
-        element.style.display = 'flex'; 
+        element.style.display = 'flex'; // Ensure trigger is displayable for capture if it's the target
       }
-      if (scrollAreaViewPort instanceof HTMLElement) {
+      if (scrollAreaViewPort instanceof HTMLElement) { // For the main scroll area
         originalScrollAreaViewportStyle = scrollAreaViewPort.style.cssText;
         scrollAreaViewPort.style.height = 'auto';
         scrollAreaViewPort.style.overflowY = 'visible';
       }
-
+      
+      element.style.paddingBottom = tempPadding; // Apply temporary padding
 
       const canvas = await html2canvas(element, {
         scale: 2, 
         useCORS: true,
         backgroundColor: '#ffffff',
-        width: element.scrollWidth, 
-        height: element.scrollHeight, 
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
+        width: element.offsetWidth, // Use offsetWidth
+        height: element.scrollHeight, // scrollHeight will include padding
+        windowWidth: element.scrollWidth, // Consider full scrollable width of element
+        windowHeight: element.scrollHeight, // Consider full scrollable height of element
         logging: false,
       });
 
+      element.style.paddingBottom = originalElementPaddingBottom; // Restore padding
       if (accordionContentParent instanceof HTMLElement) {
         accordionContentParent.style.cssText = originalAccordionStyle;
       }
@@ -432,10 +465,11 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeightRatio = imgProps.height / imgProps.width;
       
+      // This is the total height the *entire captured image section* would take up in the PDF if drawn at full width
       const scaledImgHeightFullMm = MAX_CONTENT_WIDTH_MM * imgHeightRatio;
-      if (scaledImgHeightFullMm <= 0) return true; 
+      if (scaledImgHeightFullMm <= 0) return true; // Nothing to draw for this section
 
-      let imgPartStartYpx = 0; 
+      let imgPartStartYpx = 0; // Current Y position in the source canvas image (in pixels)
 
       if (isFirstSectionOverall) {
         currentPageNum = 1;
@@ -447,14 +481,15 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         drawPageHeaderAndFooter(currentPageNum);
         currentYOnPage = CONTENT_START_Y_MM;
       } else {
-        const estimatedSpaceNeededForFirstChunk = Math.min(scaledImgHeightFullMm, MAX_CONTENT_HEIGHT_ON_PAGE_MM);
+        // Check if there's enough space on the current page for a meaningful start
+        const estimatedSpaceNeededForFirstChunk = Math.min(scaledImgHeightFullMm, MAX_CONTENT_HEIGHT_ON_PAGE_MM / 3); // Heuristic: need at least 1/3 page
         if (currentYOnPage + estimatedSpaceNeededForFirstChunk > (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM) ) {
             pdf.addPage();
             currentPageNum++;
             drawPageHeaderAndFooter(currentPageNum);
             currentYOnPage = CONTENT_START_Y_MM;
         } else if (currentYOnPage > CONTENT_START_Y_MM) { 
-            currentYOnPage += 3; 
+            currentYOnPage += 3; // Small gap before next section on same page
         }
       }
 
@@ -468,7 +503,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         
         let remainingPageHeightMm = (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM) - currentYOnPage;
         
-        if (remainingPageHeightMm <= 1) { 
+        if (remainingPageHeightMm <= 1) { // If practically no space left
             pdf.addPage();
             currentPageNum++;
             drawPageHeaderAndFooter(currentPageNum);
@@ -477,32 +512,40 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             pagesRenderedForThisSection++;
         }
         
+        // This is the height of the *rest* of the image section, scaled to PDF width
+        const remainingImageSectionHeightMm = ((imgProps.height - imgPartStartYpx) / imgProps.width) * MAX_CONTENT_WIDTH_MM;
+
+        // How much of the image can we draw on the current PDF page?
+        // It's the minimum of the space left on the page, and the actual remaining height of the image section.
         const heightOfImgPartToDrawMm = Math.min(
-            remainingPageHeightMm, 
-            ((imgProps.height - imgPartStartYpx) / imgProps.width) * MAX_CONTENT_WIDTH_MM 
+            remainingPageHeightMm,
+            remainingImageSectionHeightMm
         );
 
-        if (heightOfImgPartToDrawMm <= 0) { 
+        if (heightOfImgPartToDrawMm <= 0) { // No drawable content or no space
             break; 
         }
+        // Convert the mm height to draw back to px height for the source canvas crop
         const heightOfImgPartToDrawPx = (heightOfImgPartToDrawMm / MAX_CONTENT_WIDTH_MM) * imgProps.width;
 
         pdf.addImage(
           imgData, 'PNG',
-          PAGE_MARGIN_MM, currentYOnPage,
-          MAX_CONTENT_WIDTH_MM, heightOfImgPartToDrawMm,
-          undefined, 'NONE', 0,
-          0, 
-          imgPartStartYpx, 
-          imgProps.width, 
-          heightOfImgPartToDrawPx 
+          PAGE_MARGIN_MM, currentYOnPage, // X, Y on PDF page
+          MAX_CONTENT_WIDTH_MM, heightOfImgPartToDrawMm, // Width, Height on PDF page
+          undefined, 'NONE', 0, // alias, compression, rotation
+          // Source image cropping (all are in pixels of the source canvas)
+          0, // sx (source X)
+          imgPartStartYpx, // sy (source Y)
+          imgProps.width, // sWidth (source width)
+          heightOfImgPartToDrawPx // sHeight (source height)
         );
         
         imgPartStartYpx += heightOfImgPartToDrawPx;
         currentYOnPage += heightOfImgPartToDrawMm;
 
+        // If there's more of this section's image to draw, and we're at the bottom of the current PDF page
         if (imgPartStartYpx < imgProps.height) { 
-          if (currentYOnPage >= (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM -1) ) { 
+          if (currentYOnPage >= (CONTENT_START_Y_MM + MAX_CONTENT_HEIGHT_ON_PAGE_MM -1) ) { // -1 for a small buffer
              pdf.addPage();
              currentPageNum++;
              drawPageHeaderAndFooter(currentPageNum);
@@ -511,17 +554,33 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
           }
         }
       }
-      return true; 
+      return true; // Successfully processed this section
     };
 
     try {
       const parsedSections = parseItinerary(itinerary || "");
-      const sectionsToExport = [...parsedSections.filter(s => !s.isDaySection && s.title.toLowerCase() === "introduction"),
-                                ...parsedSections.filter(s => !s.isDaySection && s.title.toLowerCase() === "overview"),
-                                ...parsedSections.filter(s => s.isDaySection), 
-                                ...parsedSections.filter(s => !s.isDaySection && !["introduction", "overview"].includes(s.title.toLowerCase()))]; 
+      
+      // Reorder sections: Intro, then Overview, then Day sections, then others.
+      const introSection = parsedSections.find(s => s.title.toLowerCase() === "introduction" && !s.isDaySection);
+      const overviewSection = parsedSections.find(s => s.title.toLowerCase() === "overview" && !s.isDaySection);
+      const daySections = parsedSections.filter(s => s.isDaySection).sort((a, b) => {
+          const dayA = parseInt(a.title.match(/Day (\d+)/i)?.[1] || "0");
+          const dayB = parseInt(b.title.match(/Day (\d+)/i)?.[1] || "0");
+          return dayA - dayB;
+      });
+      const otherSections = parsedSections.filter(s => 
+          s.id !== introSection?.id && s.id !== overviewSection?.id && !s.isDaySection
+      );
+
+      const sectionsToExport: Section[] = [];
+      if (introSection) sectionsToExport.push(introSection);
+      if (overviewSection) sectionsToExport.push(overviewSection);
+      sectionsToExport.push(...daySections);
+      sectionsToExport.push(...otherSections);
+
 
       if (sectionsToExport.length === 0 && itinerary && itinerary.trim() !== "") {
+         // Fallback for plain text itinerary if parsing somehow fails to produce sections
          sectionsToExport.push({
             id: "pdf-section-fallback", title: "Generated Itinerary", icon: BookOpenText, 
             content: itinerary.split('\n'), isDaySection: false 
@@ -529,28 +588,28 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
       }
 
       let isFirstContentBlockOverall = true;
-      let previousSectionWasDay = false;
-
 
       for (const section of sectionsToExport) {
-        let forceNewPage = false;
-        if (section.isDaySection) {
-            forceNewPage = true; 
-            previousSectionWasDay = true;
-        } else if (section.title.toLowerCase() === "overview" && !isFirstContentBlockOverall && !previousSectionWasDay) {
-             forceNewPage = true;
-             previousSectionWasDay = false;
-        } else {
-            previousSectionWasDay = false;
-        }
+        let forceNewPageForThisSection = false;
+        const isIntro = section.title.toLowerCase() === "introduction";
+        const isOverview = section.title.toLowerCase() === "overview";
+        const isDay = section.isDaySection;
         
-        const success = await addContentToPage(section.id, isFirstContentBlockOverall, forceNewPage);
+        if (isFirstContentBlockOverall) {
+          forceNewPageForThisSection = false; // First block never forces a new page beyond the initial one
+        } else if (isOverview || isDay) {
+          // Overview, Day 1, Day 2... all start on new pages if they are not the very first content block.
+          forceNewPageForThisSection = true;
+        }
+        // Other non-day, non-overview, non-intro sections will flow normally after the previous section.
+
+        const success = await addContentToPage(section.id, isFirstContentBlockOverall, forceNewPageForThisSection);
         if (success) {
             isFirstContentBlockOverall = false;
         }
       }
       
-      if (currentPageNum === 0) { 
+      if (currentPageNum === 0) { // If no content was actually added (e.g., all sections were empty or had errors)
         currentPageNum = 1;
         drawPageHeaderAndFooter(currentPageNum);
         pdf.text("No content to export.", PAGE_MARGIN_MM, CONTENT_START_Y_MM + 10);
@@ -588,12 +647,22 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   if (!itinerary) return null;
 
   const parsedSections = parseItinerary(itinerary);
-  const introSections = parsedSections.filter(s => !s.isDaySection && s.title.toLowerCase() === "introduction");
-  const overviewSections = parsedSections.filter(s => !s.isDaySection && s.title.toLowerCase() === "overview");
-  const daySections = parsedSections.filter(s => s.isDaySection);
-  const otherNonDaySections = parsedSections.filter(s => !s.isDaySection && s.title.toLowerCase() !== "introduction" && s.title.toLowerCase() !== "overview");
+  const introSection = parsedSections.find(s => s.title.toLowerCase() === "introduction" && !s.isDaySection);
+  const overviewSection = parsedSections.find(s => s.title.toLowerCase() === "overview" && !s.isDaySection);
+  const daySections = parsedSections.filter(s => s.isDaySection).sort((a,b) => {
+      const dayA = parseInt(a.title.match(/Day (\d+)/i)?.[1] || "0");
+      const dayB = parseInt(b.title.match(/Day (\d+)/i)?.[1] || "0");
+      return dayA - dayB;
+  });
+  const otherNonDaySections = parsedSections.filter(s => 
+      s.id !== introSection?.id && s.id !== overviewSection?.id && !s.isDaySection
+  );
   
-  const allSectionsInOrder = [...introSections, ...overviewSections, ...daySections, ...otherNonDaySections];
+  const allSectionsInOrder: Section[] = [];
+  if (introSection) allSectionsInOrder.push(introSection);
+  if (overviewSection) allSectionsInOrder.push(overviewSection);
+  allSectionsInOrder.push(...daySections);
+  allSectionsInOrder.push(...otherNonDaySections);
 
 
   return (
@@ -670,7 +739,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                         </AccordionItem>
                     </Accordion>
                    );
-                } else {
+                } else { // For Introduction, Overview, and any other non-day sections
                     return (
                         <Card id={sectionHtmlId} key={sectionHtmlId} className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
                             <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
@@ -683,6 +752,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 }
               })}
               {allSectionsInOrder.length === 0 && itinerary && itinerary.trim() !== "" && (
+                  // Fallback rendering if parsing into sections somehow fails but itinerary text exists
                   <Card id="pdf-section-fallback" className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
                       <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
                           <BookOpenText className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
