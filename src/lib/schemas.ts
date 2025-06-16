@@ -39,3 +39,10 @@ export const RegisterFormSchema = z.object({
 });
 
 export type RegisterFormInput = z.infer<typeof RegisterFormSchema>;
+
+export const ProfileEditSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters.").max(100),
+  // Add other editable fields here if needed in the future, e.g., password change
+});
+
+export type ProfileEditInput = z.infer<typeof ProfileEditSchema>;

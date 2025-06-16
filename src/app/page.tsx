@@ -6,8 +6,11 @@ import { Footer } from "@/components/layout/footer";
 import Image from "next/image";
 import { Sparkles, Lightbulb, Edit3 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function HomePage() {
+  const { currentUser } = useAuth();
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <Header />
@@ -29,14 +32,14 @@ export default function HomePage() {
               Explore the World, Effortlessly
             </h2>
             <p className="text-lg sm:text-xl text-foreground/80 max-w-3xl mx-auto mb-8 font-body animate-fade-in animation-delay-200">
-              WanderAI uses cutting-edge AI to plan your perfect getaway. Login to share your travel dreams,
+              WanderAI uses cutting-edge AI to plan your perfect getaway. {currentUser ? "Head to your dashboard" : "Login or sign up"} to share your travel dreams,
               and we&apos;ll handle the details, from must-see sights to hidden gems.
             </p>
             <Link
-              href="/auth"
+              href={currentUser ? "/dashboard" : "/auth"}
               className="inline-block bg-accent hover:bg-accent/90 text-accent-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-md transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-accent/80 focus:ring-offset-2 font-body animate-fade-in animation-delay-400"
             >
-              Login to Plan Your Adventure
+              {currentUser ? "Go to Dashboard" : "Login to Plan Your Adventure"}
             </Link>
           </div>
         </section>
