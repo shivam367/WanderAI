@@ -14,6 +14,7 @@ import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
 
 interface ItineraryChatbotProps {
   itineraryContent: string;
@@ -28,18 +29,20 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   useEffect(() => {
     if (isOpen) {
+      const userName = currentUser?.name ? currentUser.name.split(' ')[0] : "there"; // Get first name or use "there"
       setMessages([
         {
           role: "model",
-          content: `Hello! I'm your WanderAI assistant. How can I help you with your trip to ${destination}? Feel free to ask about your itinerary, activities, or anything else related to your travel plans.`,
+          content: `Hello ${userName}! I'm your WanderAI assistant. How can I help you with your trip to ${destination}? Feel free to ask about your itinerary, activities, or anything else related to your travel plans.`,
         }
       ]);
       setInputValue("");
     }
-  }, [isOpen, destination]);
+  }, [isOpen, destination, currentUser]); // Added currentUser to dependencies
   
   useEffect(() => {
     if (scrollAreaViewportRef.current) {
@@ -178,3 +181,4 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
     </Sheet>
   );
 }
+
