@@ -1,3 +1,4 @@
+
 // src/app/history/page.tsx
 "use client";
 
@@ -100,7 +101,12 @@ export default function HistoryPage() {
       });
       
       // Update the currently viewed itinerary with the refined content
-      setSelectedItinerary(prev => prev ? { ...prev, content: refinedItineraryContent } : null);
+      // And importantly, update its 'destination' if it's part of currentItineraryDetailsForRefine
+      setSelectedItinerary(prev => prev ? { 
+        ...prev, 
+        content: refinedItineraryContent,
+        destination: currentItineraryDetailsForRefine.destination // Ensure destination is updated
+      } : null);
       
       toast({ title: "Itinerary Refined & Saved", description: "Your refined itinerary has been saved as a new entry in your history.", className: "bg-primary text-primary-foreground" });
       fetchItineraries(); // Refresh the list to show the new entry
@@ -141,6 +147,7 @@ export default function HistoryPage() {
             </Button>
             <ItineraryDisplay
               itinerary={selectedItinerary.content}
+              destination={selectedItinerary.destination}
               isLoading={false} // Not loading new, just viewing/refining existing
               isRefining={isRefining}
               setIsRefining={setIsRefining}
@@ -229,7 +236,7 @@ export default function HistoryPage() {
                       </CardContent>
                       <CardFooter className="flex justify-end gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleViewDetails(itinerary)} className="font-body text-primary border-primary hover:bg-primary/10">
-                          <Eye className="mr-2 h-4 w-4" /> View & Refine
+                          <Eye className="mr-2 h-4 w-4" /> View, Refine & Chat
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
