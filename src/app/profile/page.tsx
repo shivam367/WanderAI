@@ -99,7 +99,7 @@ export default function ProfilePage() {
       
       toast({
         title: "Data Cleared",
-        description: "All application data has been removed from your browser.",
+        description: "All WanderAI application data has been removed from your browser.",
         className: "bg-primary text-primary-foreground",
       });
       logout(); // This will also redirect to /auth
