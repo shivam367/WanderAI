@@ -1,4 +1,3 @@
-
 // src/app/history/page.tsx
 "use client";
 
@@ -67,16 +66,16 @@ export default function HistoryPage() {
   const handleDelete = (itineraryId: string) => {
     if (currentUser?.email) {
       apiDeleteItinerary(currentUser.email, itineraryId);
-      fetchItineraries(); // Refresh the list
-      toast({ title: "Itinerary Deleted", description: "The itinerary has been removed from your history.", className: "bg-primary text-primary-foreground" });
+      fetchItineraries(); 
+      toast({ title: "Itinerary Deleted", description: "The itinerary and its chat history have been removed.", className: "bg-primary text-primary-foreground" });
     }
   };
 
   const handleClearAllHistory = () => {
     if (currentUser?.email) {
       deleteAllItinerariesForUser(currentUser.email);
-      fetchItineraries(); // Refresh the list, should be empty now
-      toast({ title: "History Cleared", description: "All your saved itineraries have been deleted.", className: "bg-primary text-primary-foreground" });
+      fetchItineraries(); 
+      toast({ title: "History Cleared", description: "All your saved itineraries and chat histories have been deleted.", className: "bg-primary text-primary-foreground" });
     }
   };
 
@@ -94,22 +93,22 @@ export default function HistoryPage() {
     }
 
     try {
-      // Save the refined itinerary as a new entry
-      apiSaveItinerary(currentUser.email, {
-        ...currentItineraryDetailsForRefine, // destination, currency, budget, duration, interests
+      const savedRecord = apiSaveItinerary(currentUser.email, {
+        ...currentItineraryDetailsForRefine,
         content: refinedItineraryContent,
       });
       
-      // Update the currently viewed itinerary with the refined content
-      // And importantly, update its 'destination' if it's part of currentItineraryDetailsForRefine
-      setSelectedItinerary(prev => prev ? { 
-        ...prev, 
+      setSelectedItinerary({ 
+        ...selectedItinerary, 
+        id: savedRecord.id, // View the newly saved refined itinerary
         content: refinedItineraryContent,
-        destination: currentItineraryDetailsForRefine.destination // Ensure destination is updated
-      } : null);
+        destination: savedRecord.destination,
+        generatedDate: savedRecord.generatedDate, // Update date to reflect new save
+        // other fields from savedRecord if necessary
+      });
       
-      toast({ title: "Itinerary Refined & Saved", description: "Your refined itinerary has been saved as a new entry in your history.", className: "bg-primary text-primary-foreground" });
-      fetchItineraries(); // Refresh the list to show the new entry
+      toast({ title: "Itinerary Refined & Saved", description: "Your refined itinerary has been saved as a new entry.", className: "bg-primary text-primary-foreground" });
+      fetchItineraries(); 
     } catch (saveError) {
       console.error("Failed to save refined itinerary from history:", saveError);
       toast({ title: "Save Error", description: "Could not save refined itinerary to history.", variant: "destructive"});
@@ -138,7 +137,7 @@ export default function HistoryPage() {
             <Button 
               onClick={() => {
                 setSelectedItinerary(null);
-                setCurrentItineraryDetailsForRefine(null); // Clear details when going back
+                setCurrentItineraryDetailsForRefine(null);
               }} 
               variant="outline" 
               className="mb-6 font-body"
@@ -147,13 +146,14 @@ export default function HistoryPage() {
             </Button>
             <ItineraryDisplay
               itinerary={selectedItinerary.content}
+              itineraryId={selectedItinerary.id} // Pass the ID
               destination={selectedItinerary.destination}
-              isLoading={false} // Not loading new, just viewing/refining existing
+              isLoading={false}
               isRefining={isRefining}
               setIsRefining={setIsRefining}
               onItineraryRefined={handleItineraryRefined}
               error={null}
-              canRefine={true} // Enable refine button
+              canRefine={true}
             />
           </main>
           <Footer />
@@ -176,7 +176,7 @@ export default function HistoryPage() {
                     Your Itinerary History
                   </CardTitle>
                   <CardDescription className="font-body">
-                    Review and refine your past travel plans.
+                    Review, refine, and chat about your past travel plans.
                   </CardDescription>
                 </div>
                 {itineraries.length > 0 && (
@@ -190,7 +190,7 @@ export default function HistoryPage() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete all your saved itineraries.
+                          This action cannot be undone. This will permanently delete all your saved itineraries and their chat histories.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -248,7 +248,7 @@ export default function HistoryPage() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the itinerary for "{itinerary.destination || "this plan"}".
+                                This action cannot be undone. This will permanently delete the itinerary for "{itinerary.destination || "this plan"}" and its chat history.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
