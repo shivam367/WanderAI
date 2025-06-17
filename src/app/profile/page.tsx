@@ -5,12 +5,12 @@ import * as React from "react"; // Import React
 import { useEffect } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ProfileEditSchema, type ProfileEditInput, ChangePasswordSchema, type ChangePasswordInput } from "@/lib/schemas";
-import { User, Mail, Save, LogOut, KeyRound } from "lucide-react";
+import { User, Mail, Save, LogOut, KeyRound, AlertTriangle, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,6 +19,17 @@ import { Footer } from "@/components/layout/footer";
 import ProtectedRoute from "@/components/auth/protected-route";
 import { useRouter } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function ProfilePage() {
   const { toast } = useToast();
@@ -47,8 +58,6 @@ export default function ProfilePage() {
     if (currentUser) {
       profileForm.reset({ name: currentUser.name });
     }
-    // No 'else' block or fetchCurrentUser needed here.
-    // AuthContext handles initial fetch. ProtectedRoute handles redirection if no user.
   }, [currentUser, profileForm]);
 
 
@@ -69,7 +78,7 @@ export default function ProfilePage() {
     try {
       await changePassword(data);
       toast({ title: "Password Changed", description: "Your password has been updated successfully.", className: "bg-primary text-primary-foreground" });
-      passwordForm.reset(); // Clear password fields
+      passwordForm.reset(); 
     } catch (error: any) {
       toast({ title: "Password Change Failed", description: error.message, variant: "destructive" });
     } finally {
@@ -77,8 +86,26 @@ export default function ProfilePage() {
     }
   };
 
-  // This spinner shows while AuthContext is initially loading the user.
-  // ProtectedRoute also shows a spinner and handles redirection if needed.
+  const handleClearAllData = () => {
+    if (typeof window !== "undefined") {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("wanderai_")) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      toast({
+        title: "Data Cleared",
+        description: "All application data has been removed from your browser.",
+        className: "bg-primary text-primary-foreground",
+      });
+      logout(); // This will also redirect to /auth
+    }
+  };
+
   if (authLoading && !currentUser) {
     return (
       <div className="flex flex-col min-h-screen bg-background items-center justify-center">
@@ -86,11 +113,6 @@ export default function ProfilePage() {
       </div>
     );
   }
-
-  // If ProtectedRoute allows rendering, currentUser should exist.
-  // The direct router.push call that caused the error has been removed from here.
-  // ProtectedRoute will handle redirection if !currentUser after authLoading is false.
-
 
   return (
     <ProtectedRoute>
@@ -103,7 +125,7 @@ export default function ProfilePage() {
               <CardDescription className="font-body">View and update your account details.</CardDescription>
             </CardHeader>
             <CardContent>
-              {currentUser ? ( // currentUser should be available here due to ProtectedRoute
+              {currentUser ? ( 
                 <Form {...profileForm}>
                   <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
                     <FormField
@@ -132,8 +154,6 @@ export default function ProfilePage() {
                   </form>
                 </Form>
               ) : (
-                 // This state should ideally not be reached if ProtectedRoute works correctly.
-                 // If it is, ProtectedRoute's spinner should be showing or redirecting.
                 <LoadingSpinner size={32} text="Verifying user..." />
               )}
             </CardContent>
@@ -191,11 +211,45 @@ export default function ProfilePage() {
                   </form>
                 </Form>
             </CardContent>
-            <CardFooter className="pt-6"> 
+            <CardFooter className="pt-6 flex flex-col gap-4"> 
               <Button variant="outline" onClick={logout} className="w-full text-destructive border-destructive hover:bg-destructive/10 font-body" disabled={isUpdatingProfile || isChangingPassword || authLoading}>
                 <LogOut className="mr-2 h-5 w-5" /> Logout
               </Button>
             </CardFooter>
+          </Card>
+
+          <Card className="w-full max-w-lg mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-2xl font-headline text-destructive flex items-center">
+                <AlertTriangle className="mr-2 h-6 w-6" /> Danger Zone
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="font-body text-sm text-muted-foreground mb-4">
+                Clearing all app data will remove your user information, saved itineraries, and theme settings from this browser. This action cannot be undone.
+              </p>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full font-body">
+                    <Trash className="mr-2 h-5 w-5" /> Clear All App Data
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action will permanently delete all WanderAI data stored in this browser, including your account details and itinerary history. You will be logged out.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearAllData} className={buttonVariants({ variant: "destructive" })}>
+                      Yes, clear all data
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
           </Card>
 
         </main>
