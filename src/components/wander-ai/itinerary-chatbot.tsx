@@ -31,10 +31,15 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
 
   useEffect(() => {
     if (isOpen) {
-      setMessages([]); // Clear messages when chat opens
+      setMessages([
+        {
+          role: "model",
+          content: `Hello! I'm your WanderAI assistant. How can I help you with your trip to ${destination}? Feel free to ask about your itinerary, activities, or anything else related to your travel plans.`,
+        }
+      ]);
       setInputValue("");
     }
-  }, [isOpen]);
+  }, [isOpen, destination]);
   
   useEffect(() => {
     if (scrollAreaViewportRef.current) {
@@ -52,10 +57,12 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
     setIsLoading(true);
 
     try {
+      // Use only the messages *before* the new user message for history
+      const historyForAI = messages.slice(0, messages.length); 
       const aiInput: ItineraryChatInput = {
         itineraryContent,
         destination,
-        chatHistory: messages, // Send current messages as history
+        chatHistory: historyForAI, 
         userMessage,
       };
       const result = await itineraryChat(aiInput);
