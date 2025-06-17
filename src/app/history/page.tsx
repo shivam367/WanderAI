@@ -8,7 +8,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import ProtectedRoute from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
-import { getItineraries as apiGetItineraries, deleteItinerary as apiDeleteItinerary, deleteAllItinerariesForUser, type ItineraryRecord } from "@/lib/itinerary-storage";
+import { getItineraries as apiGetItineraries, deleteItinerary as apiDeleteItinerary, deleteAllItinerariesForUser, saveItinerary as apiSaveItinerary, type ItineraryRecord } from "@/lib/itinerary-storage";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trash2, Eye, CalendarClock, MapPin, Info, Trash } from "lucide-react";
@@ -44,6 +44,8 @@ export default function HistoryPage() {
   const [itineraries, setItineraries] = useState<ItineraryRecord[]>([]);
   const [selectedItinerary, setSelectedItinerary] = useState<ItineraryRecord | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isRefining, setIsRefining] = useState(false);
+  const [currentItineraryDetailsForRefine, setCurrentItineraryDetailsForRefine] = useState<Omit<ItineraryRecord, 'content' | 'id' | 'generatedDate'> | null>(null);
   const { toast } = useToast();
 
   const fetchItineraries = useCallback(() => {
@@ -79,7 +81,37 @@ export default function HistoryPage() {
 
   const handleViewDetails = (itinerary: ItineraryRecord) => {
     setSelectedItinerary(itinerary);
+    const { id, generatedDate, content, ...detailsForRefine } = itinerary;
+    setCurrentItineraryDetailsForRefine(detailsForRefine);
   };
+
+  const handleItineraryRefined = (refinedItineraryContent: string) => {
+    if (!currentUser?.email || !currentItineraryDetailsForRefine || !selectedItinerary) {
+      toast({ title: "Error", description: "Could not save refined itinerary. User or original details missing.", variant: "destructive" });
+      setIsRefining(false);
+      return;
+    }
+
+    try {
+      // Save the refined itinerary as a new entry
+      apiSaveItinerary(currentUser.email, {
+        ...currentItineraryDetailsForRefine, // destination, currency, budget, duration, interests
+        content: refinedItineraryContent,
+      });
+      
+      // Update the currently viewed itinerary with the refined content
+      setSelectedItinerary(prev => prev ? { ...prev, content: refinedItineraryContent } : null);
+      
+      toast({ title: "Itinerary Refined & Saved", description: "Your refined itinerary has been saved as a new entry in your history.", className: "bg-primary text-primary-foreground" });
+      fetchItineraries(); // Refresh the list to show the new entry
+    } catch (saveError) {
+      console.error("Failed to save refined itinerary from history:", saveError);
+      toast({ title: "Save Error", description: "Could not save refined itinerary to history.", variant: "destructive"});
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
 
   if (authLoading || isLoadingHistory) {
     return (
@@ -97,17 +129,24 @@ export default function HistoryPage() {
         <div className="flex flex-col min-h-screen bg-background">
           <Header />
           <main className="flex-grow container mx-auto px-4 py-8 sm:px-6 lg:px-8">
-            <Button onClick={() => setSelectedItinerary(null)} variant="outline" className="mb-6 font-body">
+            <Button 
+              onClick={() => {
+                setSelectedItinerary(null);
+                setCurrentItineraryDetailsForRefine(null); // Clear details when going back
+              }} 
+              variant="outline" 
+              className="mb-6 font-body"
+            >
               &larr; Back to History
             </Button>
             <ItineraryDisplay
               itinerary={selectedItinerary.content}
-              isLoading={false}
-              isRefining={false}
-              setIsRefining={() => {}} // No-op, refine not available here
-              onItineraryRefined={() => {}} // No-op
+              isLoading={false} // Not loading new, just viewing/refining existing
+              isRefining={isRefining}
+              setIsRefining={setIsRefining}
+              onItineraryRefined={handleItineraryRefined}
               error={null}
-              canRefine={false} // Disable refine button
+              canRefine={true} // Enable refine button
             />
           </main>
           <Footer />
@@ -130,7 +169,7 @@ export default function HistoryPage() {
                     Your Itinerary History
                   </CardTitle>
                   <CardDescription className="font-body">
-                    Review your past travel plans.
+                    Review and refine your past travel plans.
                   </CardDescription>
                 </div>
                 {itineraries.length > 0 && (
@@ -178,13 +217,19 @@ export default function HistoryPage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="font-body">
-                        <p className="line-clamp-3 text-foreground/80">
-                          {itinerary.content.substring(0, 200) + (itinerary.content.length > 200 ? "..." : "")}
+                         <p className="text-sm text-muted-foreground">
+                          Duration: {itinerary.duration || 'N/A'} days, Budget: {itinerary.budgetAmount || 'N/A'} {itinerary.currency || ''}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          Interests: {itinerary.interests || 'N/A'}
+                        </p>
+                        <p className="line-clamp-2 text-foreground/80 mt-2">
+                          {itinerary.content.substring(0, 150) + (itinerary.content.length > 150 ? "..." : "")}
                         </p>
                       </CardContent>
                       <CardFooter className="flex justify-end gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleViewDetails(itinerary)} className="font-body text-primary border-primary hover:bg-primary/10">
-                          <Eye className="mr-2 h-4 w-4" /> View Details
+                          <Eye className="mr-2 h-4 w-4" /> View & Refine
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -220,4 +265,3 @@ export default function HistoryPage() {
     </ProtectedRoute>
   );
 }
-
