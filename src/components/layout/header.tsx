@@ -1,3 +1,4 @@
+
 // src/components/layout/header.tsx
 "use client";
 
@@ -5,6 +6,7 @@ import Link from "next/link";
 import { PlaneTakeoff, UserCircle, LogOut, LayoutDashboard, UserCog, History } from "lucide-react"; // Added History
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { ThemeToggle } from "./theme-toggle"; // Import ThemeToggle
 
 export function Header() {
   const { currentUser, logout } = useAuth();
@@ -54,6 +56,7 @@ export function Header() {
               </Button>
             </>
           )}
+          <ThemeToggle /> {/* Add ThemeToggle here */}
         </nav>
       </div>
     </header>
