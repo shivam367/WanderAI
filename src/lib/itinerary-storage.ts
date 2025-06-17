@@ -49,3 +49,9 @@ export function deleteItinerary(userEmail: string, itineraryId: string): void {
   itineraries = itineraries.filter(it => it.id !== itineraryId);
   localStorage.setItem(getStorageKey(userEmail), JSON.stringify(itineraries));
 }
+
+export function deleteAllItinerariesForUser(userEmail: string): void {
+  if (typeof window === "undefined" || !userEmail) return;
+  const key = getStorageKey(userEmail);
+  localStorage.removeItem(key);
+}

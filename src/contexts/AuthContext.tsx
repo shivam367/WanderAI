@@ -10,10 +10,13 @@ import {
   getCurrentUser as apiGetCurrentUser,
   updateUserProfile as apiUpdateUserProfile,
   changeUserPassword as apiChangeUserPassword,
+  deleteUserAccount as apiDeleteUserAccount, // Import new function
   type User,
 } from "@/lib/auth";
+import { deleteAllItinerariesForUser as apiDeleteAllItinerariesForUser } from "@/lib/itinerary-storage"; // Import new function
 import type { RegisterFormInput, LoginFormInput, ProfileEditInput, ChangePasswordInput } from "@/lib/schemas";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 interface AuthContextType {
   currentUser: User | null;
@@ -23,6 +26,7 @@ interface AuthContextType {
   logout: () => void;
   updateProfile: (data: ProfileEditInput) => Promise<User | null>;
   changePassword: (data: ChangePasswordInput) => Promise<void>;
+  deleteAccount: () => Promise<void>; // Add new function type
   fetchCurrentUser: () => void;
 }
 
@@ -32,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const { toast } = useToast(); // Initialize useToast
 
   const fetchCurrentUser = useCallback(() => {
     setIsLoading(true);
@@ -94,7 +99,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       apiChangeUserPassword(currentUser.email, data);
-      // No need to update currentUser object here as password is not stored in it
       setIsLoading(false);
     } catch (error) {
       setIsLoading(false);
@@ -102,8 +106,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
   
+  const deleteAccount = async (): Promise<void> => {
+    if (!currentUser) {
+      toast({ title: "Error", description: "No user logged in to delete account.", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      apiDeleteAllItinerariesForUser(currentUser.email); // Delete itineraries first
+      apiDeleteUserAccount(currentUser.email); // Then delete user account entry
+      logout(); // This will clear current user email and redirect
+      toast({ title: "Account Deleted", description: "Your account and all associated data have been removed.", className: "bg-primary text-primary-foreground" });
+    } catch (error: any) {
+      toast({ title: "Account Deletion Failed", description: error.message || "Could not delete account.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, updateProfile, changePassword, fetchCurrentUser }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, updateProfile, changePassword, deleteAccount, fetchCurrentUser }}>
       {children}
     </AuthContext.Provider>
   );
