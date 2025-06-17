@@ -3,7 +3,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useRef, useEffect } from "react"; // Removed useCallback as it's not used
+import { useState, useRef } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,10 +16,11 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { RefineItineraryInputSchema, type RefineItineraryInput as RefineFormInputType } from "@/lib/schemas";
 import { refineItinerary, type RefineItineraryInput } from "@/ai/flows/refine-itinerary";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download, FileText, AlertTriangle } from "lucide-react";
+import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, MountainSnow, Building2, Download, FileText, AlertTriangle, MessageSquare } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { format } from 'date-fns';
+import { ItineraryChatbot } from "./itinerary-chatbot"; // Import the chatbot
 
 const CalendarDaysIcon = ({className}: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
@@ -27,6 +28,7 @@ const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height
 
 interface ItineraryDisplayProps {
   itinerary: string | null;
+  destination?: string; // Added destination prop for the chatbot
   isLoading: boolean;
   isRefining: boolean;
   setIsRefining: (refining: boolean) => void;
@@ -152,9 +154,10 @@ function parseItineraryForHtmlDisplay(itineraryText: string): HtmlSection[] {
 }
 
 
-export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefining, onItineraryRefined, error, canRefine = true }: ItineraryDisplayProps) {
+export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining, setIsRefining, onItineraryRefined, error, canRefine = true }: ItineraryDisplayProps) {
   const { toast } = useToast();
   const [showRefineForm, setShowRefineForm] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false); // State for chatbot visibility
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const itineraryContentRef = useRef<HTMLDivElement>(null);
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
@@ -315,8 +318,8 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     const PDF_PAGE_WIDTH_MM = 210;
     const PDF_PAGE_HEIGHT_MM = 297;
     const PAGE_MARGIN_MM = 15;
-    const HEADER_HEIGHT_MM = 20;
-    const FOOTER_HEIGHT_MM = 15;
+    const HEADER_HEIGHT_MM = 20; // Space for header content below margin
+    const FOOTER_HEIGHT_MM = 15; // Space for footer content above margin
     const MAX_CONTENT_WIDTH_MM = PDF_PAGE_WIDTH_MM - 2 * PAGE_MARGIN_MM;
     const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_HEIGHT_MM;
     const MAX_Y_BEFORE_FOOTER_MM = PDF_PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM;
@@ -344,7 +347,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
 
     const SPACE_ABOVE_SEPARATOR_MM = 3;
     const SEPARATOR_LINE_THICKNESS_MM = 0.3;
-    const SPACE_BELOW_SEPARATOR_TO_TITLE_MM = 6; // Increased to avoid overlap
+    const SPACE_BELOW_SEPARATOR_TO_TITLE_MM = 6;
     const SPACE_AFTER_MAIN_TITLE_MM = 4;
     const SPACE_BEFORE_SUB_HEADING_MM = 3;
     const SPACE_AFTER_SUB_HEADING_MM = 1.5;
@@ -365,7 +368,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     tempSvgContainer.style.width = '64px';
     tempSvgContainer.style.height = '64px';
     document.body.appendChild(tempSvgContainer);
-    tempSvgContainer.innerHTML = svgLogoString;
     try {
       await new Promise(resolve => setTimeout(resolve, 300));
       const svgCanvas = await html2canvas(tempSvgContainer, {
@@ -377,7 +379,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
 
     const drawPageHeader = (pdfInstance: jsPDF, logoUrl: string | null) => {
         const logoX = PAGE_MARGIN_MM;
-        const logoY = PAGE_MARGIN_MM;
+        const logoY = PAGE_MARGIN_MM; // Start drawing header content from top margin
         const logoHeightMm = 12;
         const logoWidthMm = 12;
         const headerTextSpacingMm = 3;
@@ -396,39 +398,35 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         pdfInstance.text("Your Personal AI Travel Planner", textStartX, logoY + (logoHeightMm/2) + 5);
     };
 
-    const drawPageFooter = (pdfInstance: jsPDF, pageNum: number, totalPagesArg: string | number) => {
+    const drawPageFooter = (pdfInstance: jsPDF, pageNum: number, totalPagesArg: string | number, isSecondPass: boolean = false) => {
         const footerLineY = PDF_PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM + 2;
-        pdfInstance.setDrawColor(PDF_COLOR_LINE[0], PDF_COLOR_LINE[1], PDF_COLOR_LINE[2]);
-        pdfInstance.setLineWidth(0.3);
-        pdfInstance.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM, footerLineY);
-
-        const footerTextY = footerLineY + 5;
+        const footerTextY = footerLineY + 5; // Text slightly below the line
         const generationTimestampStr = format(new Date(), "MMM d, yyyy, h:mm a");
         const pageNumText = `Page ${pageNum} of ${totalPagesArg}`;
-
-        // If it's the second pass (updating page numbers), clear the entire text line area first
-        if (typeof totalPagesArg === 'number' || (typeof totalPagesArg === 'string' && totalPagesArg !== totalPagesPlaceholder)) {
+    
+        // On the second pass, clear the entire footer text line area before redrawing
+        if (isSecondPass) {
             const clearX = PAGE_MARGIN_MM;
             const clearWidth = PDF_PAGE_WIDTH_MM - 2 * PAGE_MARGIN_MM;
-            // Calculate Y and Height for clearing the text line. Adjust 0.75 & 1.5 factors as needed for your font.
-            const textLineHeightMm = FONT_SIZE_FOOTER_TEXT * 0.352778 * 1.2; // pt to mm, with a small buffer
+            const textLineHeightMm = FONT_SIZE_FOOTER_TEXT * 0.352778 * 1.2; // pt to mm, with line spacing
             const clearY = footerTextY - (textLineHeightMm * 0.85) ; // Start clearing slightly above the baseline
             const clearHeight = textLineHeightMm * 1.2; // Ensure full coverage of the text line
-
+    
             pdfInstance.setFillColor(255, 255, 255); // White
             pdfInstance.rect(clearX, clearY, clearWidth, clearHeight, 'F');
+        } else { // First pass, draw the line
+            pdfInstance.setDrawColor(PDF_COLOR_LINE[0], PDF_COLOR_LINE[1], PDF_COLOR_LINE[2]);
+            pdfInstance.setLineWidth(0.3);
+            pdfInstance.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM, footerLineY);
         }
-        
+    
         pdfInstance.setFont(FONT_STYLE_NORMAL).setFontSize(FONT_SIZE_FOOTER_TEXT).setTextColor(PDF_COLOR_MUTED_TEXT[0], PDF_COLOR_MUTED_TEXT[1], PDF_COLOR_MUTED_TEXT[2]);
         
-        // Draw "WanderAI" on the left
         pdfInstance.text("WanderAI", PAGE_MARGIN_MM, footerTextY);
-
-        // Draw timestamp on the right
+    
         const dateTextWidth = pdfInstance.getStringUnitWidth(generationTimestampStr) * FONT_SIZE_FOOTER_TEXT / pdfInstance.internal.scaleFactor;
         pdfInstance.text(generationTimestampStr, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM - dateTextWidth, footerTextY);
-
-        // Draw "Page X of Y" in the center
+    
         const currentTextWidth = pdfInstance.getStringUnitWidth(pageNumText) * FONT_SIZE_FOOTER_TEXT / pdfInstance.internal.scaleFactor;
         pdfInstance.text(pageNumText, (PDF_PAGE_WIDTH_MM / 2) - (currentTextWidth / 2), footerTextY);
     };
@@ -438,7 +436,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             pdf.addPage();
             currentPageNumRef.current++;
             drawPageHeader(pdf, svgDataUrl);
-            drawPageFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder);
+            drawPageFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder, false); // First pass for new page
             yRef.current = CONTENT_START_Y_MM;
             return true;
         }
@@ -508,7 +506,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
                 pdf.text(textSegment, currentXPosForSegment, yRef.current, { charSpace: 0 });
                 currentXPosForSegment += pdf.getStringUnitWidth(textSegment) * effectiveFontSize / pdf.internal.scaleFactor;
             });
-            if (!lineIsEmpty || isListItem) { // Only advance Y if line had content or was a list item (even if empty)
+            if (!lineIsEmpty || isListItem) { 
                  yRef.current += singleLineHeightMm;
             }
         });
@@ -516,7 +514,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     };
 
     drawPageHeader(pdf, svgDataUrl);
-    drawPageFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder);
+    drawPageFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder, false); // First pass for initial page
 
     const itineraryLines = itinerary.split('\n');
     let isPreviousLineBlank = false;
@@ -562,8 +560,6 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             renderTextWithStyles(titleText, PAGE_MARGIN_MM, {
                 fontSize: FONT_SIZE_MAIN_TITLE, fontName: FONT_STYLE_BOLD, color: PDF_COLOR_PRIMARY_HEADING, lineSpacingFactor: LINE_SPACING_FACTOR_HEADING
             });
-            // renderTextWithStyles already advances yRef.current.
-            // Add specific space AFTER the title if needed, before next element.
             checkAndAddNewPageIfNeeded(SPACE_AFTER_MAIN_TITLE_MM); 
             yRef.current += SPACE_AFTER_MAIN_TITLE_MM;
             isFirstContentElement = false;
@@ -585,7 +581,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
             });
             
             if (remainingContent) {
-                 renderTextWithStyles(remainingContent, PAGE_MARGIN_MM + 2, { // Indent content slightly
+                 renderTextWithStyles(remainingContent, PAGE_MARGIN_MM + 2, { 
                     fontSize: FONT_SIZE_BODY, color: PDF_COLOR_TEXT_DEFAULT, lineSpacingFactor: LINE_SPACING_FACTOR_BODY
                  });
             } else {
@@ -599,11 +595,10 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         const listItemMatch = trimmedLine.match(listItemRegex);
         if (listItemMatch) {
             const itemText = listItemMatch[1].trim();
-            // Do not add extra space before/after list items, renderTextWithStyles handles its height
             renderTextWithStyles(itemText, PAGE_MARGIN_MM, {
                 fontSize: FONT_SIZE_LIST_ITEM, isListItem: true, color: PDF_COLOR_TEXT_DEFAULT, lineSpacingFactor: LINE_SPACING_FACTOR_LIST
             });
-             checkAndAddNewPageIfNeeded(SPACE_AFTER_LIST_ITEM_MM); // Ensure a small gap after list items
+             checkAndAddNewPageIfNeeded(SPACE_AFTER_LIST_ITEM_MM); 
              yRef.current += SPACE_AFTER_LIST_ITEM_MM;
             isFirstContentElement = false;
             continue;
@@ -614,7 +609,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
         renderTextWithStyles(trimmedLine, PAGE_MARGIN_MM, {
             fontSize: FONT_SIZE_BODY, color: PDF_COLOR_TEXT_DEFAULT, lineSpacingFactor: LINE_SPACING_FACTOR_BODY
         });
-        checkAndAddNewPageIfNeeded(SPACE_AFTER_PARAGRAPH_MM); // Ensure a small gap after paragraphs
+        checkAndAddNewPageIfNeeded(SPACE_AFTER_PARAGRAPH_MM); 
         yRef.current += SPACE_AFTER_PARAGRAPH_MM;
         isFirstContentElement = false;
     }
@@ -622,7 +617,7 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
     const finalTotalPages = currentPageNumRef.current;
     for (let pageIdx = 1; pageIdx <= finalTotalPages; pageIdx++) {
         pdf.setPage(pageIdx);
-        drawPageFooter(pdf, pageIdx, finalTotalPages.toString());
+        drawPageFooter(pdf, pageIdx, finalTotalPages.toString(), true); // Second pass for all pages
     }
 
     try {
@@ -676,103 +671,122 @@ export function ItineraryDisplay({ itinerary, isLoading, isRefining, setIsRefini
   allSectionsInOrderForHtml.push(...otherNonDaySectionsHtml);
 
   return (
-    <Card className="mt-12 w-full max-w-4xl mx-auto shadow-xl animate-slide-in-up bg-card/90 backdrop-blur-sm">
-      <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <CardTitle className="text-3xl font-headline text-primary flex items-center gap-2">
-            <BookOpenText className="h-8 w-8" />
-            Your Custom Itinerary
-          </CardTitle>
-          <CardDescription className="font-body">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
-        </div>
-        <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
-          {canRefine && (
-            <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
-              <Edit3 className="mr-2 h-4 w-4" /> {showRefineForm ? "Cancel Refine" : "Refine Itinerary"}
+    <>
+      <Card className="mt-12 w-full max-w-4xl mx-auto shadow-xl animate-slide-in-up bg-card/90 backdrop-blur-sm">
+        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <CardTitle className="text-3xl font-headline text-primary flex items-center gap-2">
+              <BookOpenText className="h-8 w-8" />
+              Your Custom Itinerary
+            </CardTitle>
+            <CardDescription className="font-body">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
+          </div>
+          <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
+             {itinerary && destination && (
+              <Button
+                onClick={() => setIsChatOpen(true)}
+                variant="outline"
+                className="text-primary border-primary hover:bg-primary/10 font-body w-full sm:w-auto"
+                disabled={isRefining || isExportingPdf}
+              >
+                <MessageSquare className="mr-2 h-4 w-4" /> Chat About Trip
+              </Button>
+            )}
+            {canRefine && (
+              <Button onClick={() => setShowRefineForm(!showRefineForm)} variant="outline" className="text-accent border-accent hover:bg-accent/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
+                <Edit3 className="mr-2 h-4 w-4" /> {showRefineForm ? "Cancel Refine" : "Refine Itinerary"}
+              </Button>
+            )}
+            <Button onClick={handleExportPdf} variant="outline" className="text-primary border-primary hover:bg-primary/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
+              {isExportingPdf ? <LoadingSpinner size={20} /> : <><Download className="mr-2 h-4 w-4" /> Export to PDF</>}
             </Button>
+          </div>
+        </CardHeader>
+        <CardContent ref={itineraryContentRef} className="bg-background text-foreground p-1 rounded-md border border-input">
+          {canRefine && showRefineForm && (
+            <Card className="mb-6 bg-secondary/50 p-2 sm:p-4 md:p-6 animate-fade-in">
+              <CardHeader>
+                <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Sparkles className="h-6 w-6"/>Refine Your Itinerary</CardTitle>
+                <CardDescription className="font-body">Provide feedback on what you'd like to change or add.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Form {...refineForm}>
+                  <form onSubmit={refineForm.handleSubmit(onRefineSubmit)} className="space-y-4">
+                    <FormField control={refineForm.control} name="userFeedback" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-body">Your Feedback</FormLabel>
+                        <FormControl><Textarea placeholder="e.g., 'Add more vegetarian food options', 'Include a visit to Eiffel Tower on Day 2'" {...field} className="min-h-[120px] font-body" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground font-body" disabled={isRefining || isExportingPdf}>
+                      {isRefining ? <LoadingSpinner size={20} /> : "Submit Feedback"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
           )}
-          <Button onClick={handleExportPdf} variant="outline" className="text-primary border-primary hover:bg-primary/10 font-body w-full sm:w-auto" disabled={isRefining || isExportingPdf}>
-            {isExportingPdf ? <LoadingSpinner size={20} /> : <><Download className="mr-2 h-4 w-4" /> Export to PDF</>}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent ref={itineraryContentRef} className="bg-background text-foreground p-1 rounded-md border border-input">
-        {canRefine && showRefineForm && (
-          <Card className="mb-6 bg-secondary/50 p-2 sm:p-4 md:p-6 animate-fade-in">
-            <CardHeader>
-              <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Sparkles className="h-6 w-6"/>Refine Your Itinerary</CardTitle>
-              <CardDescription className="font-body">Provide feedback on what you'd like to change or add.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...refineForm}>
-                <form onSubmit={refineForm.handleSubmit(onRefineSubmit)} className="space-y-4">
-                  <FormField control={refineForm.control} name="userFeedback" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-body">Your Feedback</FormLabel>
-                      <FormControl><Textarea placeholder="e.g., 'Add more vegetarian food options', 'Include a visit to Eiffel Tower on Day 2'" {...field} className="min-h-[120px] font-body" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground font-body" disabled={isRefining || isExportingPdf}>
-                    {isRefining ? <LoadingSpinner size={20} /> : "Submit Feedback"}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        )}
 
-        {(isRefining && !showRefineForm) && (
-           <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
-        )}
+          {(isRefining && !showRefineForm) && (
+            <div className="my-6 flex justify-center items-center min-h-[100px]"><LoadingSpinner size={32} text="Refining your itinerary..." /></div>
+          )}
 
-         <ScrollArea className="h-[600px] overflow-y-auto p-1" viewportRef={scrollAreaViewportRef}>
-            <div className="space-y-1">
-              {allSectionsInOrderForHtml.map((section) => {
-                const sectionHtmlId = section.id || `html-display-section-${Math.random().toString(36).substring(2, 9)}`;
-                if (section.isDaySection) {
-                   return (
-                    <Accordion type="multiple" className="w-full" defaultValue={[sectionHtmlId]} key={sectionHtmlId}>
-                        <AccordionItem value={sectionHtmlId} className="mb-1 border-b-0 last:mb-0">
-                            <Card id={sectionHtmlId} className="shadow-sm overflow-hidden bg-background/90 text-foreground my-1">
-                                <AccordionTrigger className="p-3 hover:no-underline hover:bg-secondary/30 transition-colors rounded-t-lg w-full">
-                                    <h3 className="text-lg font-headline font-semibold text-primary flex items-center">
-                                    <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
-                                    {section.title}
-                                    </h3>
-                                </AccordionTrigger>
-                                <AccordionContent className="p-3 pt-1 rounded-b-lg border-t border-border/50">
-                                    {renderContentForHtml(section.content)}
-                                </AccordionContent>
-                            </Card>
-                        </AccordionItem>
-                    </Accordion>
-                   );
-                } else {
+          <ScrollArea className="h-[600px] overflow-y-auto p-1" viewportRef={scrollAreaViewportRef}>
+              <div className="space-y-1">
+                {allSectionsInOrderForHtml.map((section) => {
+                  const sectionHtmlId = section.id || `html-display-section-${Math.random().toString(36).substring(2, 9)}`;
+                  if (section.isDaySection) {
                     return (
-                        <Card id={sectionHtmlId} key={sectionHtmlId} className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
-                            <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
-                                <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
-                                {section.title}
-                            </h3>
-                            {renderContentForHtml(section.content)}
-                        </Card>
+                      <Accordion type="multiple" className="w-full" defaultValue={[sectionHtmlId]} key={sectionHtmlId}>
+                          <AccordionItem value={sectionHtmlId} className="mb-1 border-b-0 last:mb-0">
+                              <Card id={sectionHtmlId} className="shadow-sm overflow-hidden bg-background/90 text-foreground my-1">
+                                  <AccordionTrigger className="p-3 hover:no-underline hover:bg-secondary/30 transition-colors rounded-t-lg w-full">
+                                      <h3 className="text-lg font-headline font-semibold text-primary flex items-center">
+                                      <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
+                                      {section.title}
+                                      </h3>
+                                  </AccordionTrigger>
+                                  <AccordionContent className="p-3 pt-1 rounded-b-lg border-t border-border/50">
+                                      {renderContentForHtml(section.content)}
+                                  </AccordionContent>
+                              </Card>
+                          </AccordionItem>
+                      </Accordion>
                     );
-                }
-              })}
-              {allSectionsInOrderForHtml.length === 0 && itinerary && itinerary.trim() !== "" && (
-                  <Card id="html-section-fallback" className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
-                      <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
-                          <BookOpenText className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
-                          Generated Itinerary
-                      </h3>
-                      {renderContentForHtml(itinerary.split('\n'))}
-                  </Card>
-              )}
-            </div>
-          </ScrollArea>
-      </CardContent>
-    </Card>
+                  } else {
+                      return (
+                          <Card id={sectionHtmlId} key={sectionHtmlId} className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
+                              <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
+                                  <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
+                                  {section.title}
+                              </h3>
+                              {renderContentForHtml(section.content)}
+                          </Card>
+                      );
+                  }
+                })}
+                {allSectionsInOrderForHtml.length === 0 && itinerary && itinerary.trim() !== "" && (
+                    <Card id="html-section-fallback" className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
+                        <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
+                            <BookOpenText className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
+                            Generated Itinerary
+                        </h3>
+                        {renderContentForHtml(itinerary.split('\n'))}
+                    </Card>
+                )}
+              </div>
+            </ScrollArea>
+        </CardContent>
+      </Card>
+      {itinerary && destination && (
+        <ItineraryChatbot
+          itineraryContent={itinerary}
+          destination={destination}
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+        />
+      )}
+    </>
   );
 }
-

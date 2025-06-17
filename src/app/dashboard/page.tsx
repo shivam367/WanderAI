@@ -91,6 +91,7 @@ export default function DashboardPage() {
               <div id="itinerary-display">
                 <ItineraryDisplay
                   itinerary={itinerary}
+                  destination={currentGenerationDetails?.destination}
                   isLoading={isLoading && !itinerary}
                   isRefining={isRefining}
                   setIsRefining={setIsRefining}
@@ -107,4 +108,3 @@ export default function DashboardPage() {
     </ProtectedRoute>
   );
 }
-
