@@ -43,7 +43,7 @@ Your current task is to discuss a specific travel itinerary with the user.
 
 Here is the itinerary content you should focus on:
 <itinerary_context>
-{{itineraryContent}}
+{{{itineraryContent}}}
 </itinerary_context>
 
 The primary destination for this itinerary is: {{destination}}.
@@ -58,8 +58,7 @@ IMPORTANT RULE: You MUST ONLY discuss travel-related topics. If the user asks a 
 
 Conversation History:
 {{#each chatHistory}}
-  {{#if (eq role 'user')}}User: {{content}}{{/if}}
-  {{#if (eq role 'model')}}AI: {{content}}{{/if}}
+  {{role}}: {{this.content}}
 {{/each}}
 
 User's latest message: {{userMessage}}
@@ -92,3 +91,4 @@ const itineraryChatFlow = ai.defineFlow(
     return output || {response: "I'm sorry, I couldn't generate a response at this time."};
   }
 );
+
