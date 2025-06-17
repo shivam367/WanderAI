@@ -110,6 +110,12 @@ export function changeUserPassword(email: string, data: ChangePasswordInput): vo
   saveUsers(users);
 }
 
+export function deleteUserAccount(email: string): void {
+  if (typeof window === "undefined") return;
+  let users = getUsers();
+  users = users.filter(user => user.email !== email);
+  saveUsers(users);
+}
 
 export function isUserLoggedIn(): boolean {
   if (typeof window === "undefined") return false;

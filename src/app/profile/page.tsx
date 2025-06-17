@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ProfileEditSchema, type ProfileEditInput, ChangePasswordSchema, type ChangePasswordInput } from "@/lib/schemas";
-import { User, Mail, Save, LogOut, KeyRound, AlertTriangle, Trash } from "lucide-react";
+import { User, Mail, Save, LogOut, KeyRound, AlertTriangle, Trash, UserX } from "lucide-react"; // Added UserX
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,10 +33,11 @@ import {
 
 export default function ProfilePage() {
   const { toast } = useToast();
-  const { currentUser, updateProfile, logout, changePassword, isLoading: authLoading } = useAuth();
+  const { currentUser, updateProfile, logout, changePassword, deleteAccount, isLoading: authLoading } = useAuth(); // Added deleteAccount
   const router = useRouter();
   const [isUpdatingProfile, setIsUpdatingProfile] = React.useState(false);
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = React.useState(false); // Added state for delete account
 
   const profileForm = useForm<ProfileEditInput>({
     resolver: zodResolver(ProfileEditSchema),
@@ -99,12 +100,26 @@ export default function ProfilePage() {
       
       toast({
         title: "Data Cleared",
-        description: "All WanderAI application data has been removed from your browser.",
+        description: "All WanderAI application data has been removed from this browser.",
         className: "bg-primary text-primary-foreground",
       });
       logout(); // This will also redirect to /auth
     }
   };
+
+  const handleDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      await deleteAccount();
+      // Toast and redirection are handled by the deleteAccount function in AuthContext
+    } catch (error: any) {
+      // This catch is mainly for unexpected errors not handled by AuthContext's deleteAccount
+      toast({ title: "Account Deletion Failed", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
 
   if (authLoading && !currentUser) {
     return (
@@ -212,7 +227,7 @@ export default function ProfilePage() {
                 </Form>
             </CardContent>
             <CardFooter className="pt-6 flex flex-col gap-4"> 
-              <Button variant="outline" onClick={logout} className="w-full text-destructive border-destructive hover:bg-destructive/10 font-body" disabled={isUpdatingProfile || isChangingPassword || authLoading}>
+              <Button variant="outline" onClick={logout} className="w-full text-destructive border-destructive hover:bg-destructive/10 font-body" disabled={isUpdatingProfile || isChangingPassword || authLoading || isDeletingAccount}>
                 <LogOut className="mr-2 h-5 w-5" /> Logout
               </Button>
             </CardFooter>
@@ -224,31 +239,67 @@ export default function ProfilePage() {
                 <AlertTriangle className="mr-2 h-6 w-6" /> Danger Zone
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="font-body text-sm text-muted-foreground mb-4">
-                Clearing all app data will remove your user information, saved itineraries, and theme settings from this browser. This action cannot be undone.
-              </p>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="w-full font-body">
-                    <Trash className="mr-2 h-5 w-5" /> Clear All App Data
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action will permanently delete all WanderAI data stored in this browser, including your account details and itinerary history. You will be logged out.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearAllData} className={buttonVariants({ variant: "destructive" })}>
-                      Yes, clear all data
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="font-body text-sm text-muted-foreground mb-2">
+                  Clearing all app data will remove your user information, saved itineraries, and theme settings from this browser. This action cannot be undone.
+                </p>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full font-body" disabled={isDeletingAccount || authLoading}>
+                      <Trash className="mr-2 h-5 w-5" /> Clear All App Data (This Browser)
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action will permanently delete all WanderAI data stored in this browser, including your account details and itinerary history. You will be logged out. This affects all users on this browser.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleClearAllData} className={buttonVariants({ variant: "destructive" })}>
+                        Yes, clear all data
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+
+              <Separator />
+
+              <div>
+                <p className="font-body text-sm text-muted-foreground mb-2">
+                  Deleting your account will permanently remove your profile and all associated itinerary history. This action cannot be undone.
+                </p>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full font-body" disabled={isDeletingAccount || authLoading}>
+                      <UserX className="mr-2 h-5 w-5" /> Delete My Account
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete your WanderAI account ({currentUser?.email}) and all associated data, including your profile information and itinerary history. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteAccount}
+                        className={buttonVariants({ variant: "destructive" })}
+                        disabled={isDeletingAccount}
+                      >
+                        {isDeletingAccount ? <LoadingSpinner size={20} /> : "Yes, delete my account"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+
             </CardContent>
           </Card>
 
