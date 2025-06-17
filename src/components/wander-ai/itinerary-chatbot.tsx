@@ -1,4 +1,3 @@
-
 // src/components/wander-ai/itinerary-chatbot.tsx
 "use client";
 
@@ -7,42 +6,52 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { itineraryChat, type ItineraryChatInput, type ChatMessage } from "@/ai/flows/itinerary-chat-flow";
 import { Send, MessageSquare, User, Bot, CornerDownLeft } from "lucide-react";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
+import { useAuth } from '@/contexts/AuthContext';
+import { getChatMessages, saveChatMessages } from '@/lib/itinerary-storage'; // Import chat storage functions
 
 interface ItineraryChatbotProps {
   itineraryContent: string;
   destination: string;
+  itineraryId: string; // Added itineraryId
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClose }: ItineraryChatbotProps) {
+export function ItineraryChatbot({ itineraryContent, destination, itineraryId, isOpen, onClose }: ItineraryChatbotProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
-  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const { currentUser } = useAuth();
 
   useEffect(() => {
-    if (isOpen) {
-      const userName = currentUser?.name ? currentUser.name.split(' ')[0] : "there"; // Get first name or use "there"
-      setMessages([
-        {
+    if (isOpen && currentUser?.email && itineraryId) {
+      const loadedMessages = getChatMessages(currentUser.email, itineraryId);
+      if (loadedMessages.length > 0) {
+        setMessages(loadedMessages);
+      } else {
+        const userName = currentUser?.name ? currentUser.name.split(' ')[0] : "there";
+        const initialMessage: ChatMessage = {
           role: "model",
           content: `Hello ${userName}! I'm your WanderAI assistant. How can I help you with your trip to ${destination}? Feel free to ask about your itinerary, activities, or anything else related to your travel plans.`,
-        }
-      ]);
+        };
+        setMessages([initialMessage]);
+        saveChatMessages(currentUser.email, itineraryId, [initialMessage]); // Save initial message
+      }
       setInputValue("");
+    } else if (!isOpen) {
+      // Optional: Clear messages when closed if you don't want them to persist visually after closing and reopening before new load
+      // setMessages([]); 
     }
-  }, [isOpen, destination, currentUser]); // Added currentUser to dependencies
+  }, [isOpen, destination, currentUser, itineraryId]);
   
   useEffect(() => {
     if (scrollAreaViewportRef.current) {
@@ -51,30 +60,41 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
   }, [messages]);
 
   const handleSendMessage = async () => {
-    const userMessage = inputValue.trim();
-    if (!userMessage) return;
+    if (!currentUser?.email || !itineraryId) {
+      toast({ title: "Error", description: "Cannot send message. User or itinerary context is missing.", variant: "destructive"});
+      return;
+    }
 
-    const newUserMessage: ChatMessage = { role: "user", content: userMessage };
-    setMessages((prevMessages) => [...prevMessages, newUserMessage]);
+    const userMessageText = inputValue.trim();
+    if (!userMessageText) return;
+
+    const newUserMessage: ChatMessage = { role: "user", content: userMessageText };
+    const updatedMessagesWithUser = [...messages, newUserMessage];
+    setMessages(updatedMessagesWithUser);
+    saveChatMessages(currentUser.email, itineraryId, updatedMessagesWithUser); // Save after user message
     setInputValue("");
     setIsLoading(true);
 
     try {
-      // Use only the messages *before* the new user message for history
-      const historyForAI = messages.slice(0, messages.length); 
+      const historyForAI = messages.slice(); // Send current messages as history
       const aiInput: ItineraryChatInput = {
         itineraryContent,
         destination,
         chatHistory: historyForAI, 
-        userMessage,
+        userMessage: userMessageText,
       };
       const result = await itineraryChat(aiInput);
       const aiResponse: ChatMessage = { role: "model", content: result.response };
-      setMessages((prevMessages) => [...prevMessages, aiResponse]);
+      const finalMessages = [...updatedMessagesWithUser, aiResponse];
+      setMessages(finalMessages);
+      saveChatMessages(currentUser.email, itineraryId, finalMessages); // Save after AI response
     } catch (error) {
       console.error("Error with chatbot:", error);
-      const errorMessage: ChatMessage = { role: "model", content: "Sorry, I encountered an error. Please try again." };
-      setMessages((prevMessages) => [...prevMessages, errorMessage]);
+      const errorMessageText = "Sorry, I encountered an error. Please try again.";
+      const errorMessage: ChatMessage = { role: "model", content: errorMessageText };
+      const messagesWithError = [...updatedMessagesWithUser, errorMessage];
+      setMessages(messagesWithError);
+      saveChatMessages(currentUser.email, itineraryId, messagesWithError); // Save with error message
       toast({
         title: "Chatbot Error",
         description: (error as Error).message || "Could not get a response from the chatbot.",
@@ -91,10 +111,10 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
         <SheetHeader className="p-6 border-b">
           <SheetTitle className="font-headline text-2xl text-primary flex items-center">
             <MessageSquare className="mr-2 h-6 w-6" />
-            Chat about your trip to {destination}
+            Chat: {destination}
           </SheetTitle>
           <SheetDescription className="font-body">
-            Ask questions about your itinerary, nearby attractions, or travel tips.
+            Ask about your itinerary, local tips, or nearby attractions.
           </SheetDescription>
         </SheetHeader>
         
@@ -163,7 +183,7 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               className="flex-1 font-body"
-              disabled={isLoading}
+              disabled={isLoading || !currentUser || !itineraryId}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !isLoading && inputValue.trim()) {
                   e.preventDefault();
@@ -171,7 +191,7 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
                 }
               }}
             />
-            <Button type="submit" size="icon" disabled={isLoading || !inputValue.trim()} className="bg-accent hover:bg-accent/90">
+            <Button type="submit" size="icon" disabled={isLoading || !inputValue.trim() || !currentUser || !itineraryId} className="bg-accent hover:bg-accent/90">
               {isLoading ? <CornerDownLeft className="h-4 w-4 animate-pulse" /> : <Send className="h-4 w-4" />}
               <span className="sr-only">Send message</span>
             </Button>
@@ -181,4 +201,3 @@ export function ItineraryChatbot({ itineraryContent, destination, isOpen, onClos
     </Sheet>
   );
 }
-

@@ -1,4 +1,3 @@
-
 // src/components/wander-ai/itinerary-display.tsx
 "use client";
 
@@ -20,7 +19,7 @@ import { BookOpenText, Edit3, Sparkles, Lightbulb, Utensils, BedDouble, Mountain
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { format } from 'date-fns';
-import { ItineraryChatbot } from "./itinerary-chatbot"; // Import the chatbot
+import { ItineraryChatbot } from "./itinerary-chatbot";
 
 const CalendarDaysIcon = ({className}: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
@@ -28,7 +27,8 @@ const svgLogoString = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height
 
 interface ItineraryDisplayProps {
   itinerary: string | null;
-  destination?: string; // Added destination prop for the chatbot
+  itineraryId?: string; // Added itineraryId for chatbot context
+  destination?: string;
   isLoading: boolean;
   isRefining: boolean;
   setIsRefining: (refining: boolean) => void;
@@ -154,10 +154,10 @@ function parseItineraryForHtmlDisplay(itineraryText: string): HtmlSection[] {
 }
 
 
-export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining, setIsRefining, onItineraryRefined, error, canRefine = true }: ItineraryDisplayProps) {
+export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoading, isRefining, setIsRefining, onItineraryRefined, error, canRefine = true }: ItineraryDisplayProps) {
   const { toast } = useToast();
   const [showRefineForm, setShowRefineForm] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false); // State for chatbot visibility
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const itineraryContentRef = useRef<HTMLDivElement>(null);
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
@@ -318,8 +318,8 @@ export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining
     const PDF_PAGE_WIDTH_MM = 210;
     const PDF_PAGE_HEIGHT_MM = 297;
     const PAGE_MARGIN_MM = 15;
-    const HEADER_HEIGHT_MM = 20; // Space for header content below margin
-    const FOOTER_HEIGHT_MM = 15; // Space for footer content above margin
+    const HEADER_HEIGHT_MM = 20; 
+    const FOOTER_HEIGHT_MM = 15; 
     const MAX_CONTENT_WIDTH_MM = PDF_PAGE_WIDTH_MM - 2 * PAGE_MARGIN_MM;
     const CONTENT_START_Y_MM = PAGE_MARGIN_MM + HEADER_HEIGHT_MM;
     const MAX_Y_BEFORE_FOOTER_MM = PDF_PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM;
@@ -361,25 +361,31 @@ export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining
     const totalPagesPlaceholder = "__TOTAL_PAGES__";
 
     const tempSvgContainer = document.createElement('div');
+    tempSvgContainer.innerHTML = svgLogoString;
     tempSvgContainer.id = 'temp-svg-container-for-pdf-export';
     tempSvgContainer.style.position = 'absolute';
     tempSvgContainer.style.left = '-9999px';
     tempSvgContainer.style.top = '-9999px';
-    tempSvgContainer.style.width = '64px';
-    tempSvgContainer.style.height = '64px';
+    tempSvgContainer.style.width = '64px'; // Match SVG width
+    tempSvgContainer.style.height = '64px'; // Match SVG height
     document.body.appendChild(tempSvgContainer);
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const svgCanvas = await html2canvas(tempSvgContainer, {
-        scale: 3, backgroundColor: null, useCORS: true, width: 64, height: 64, logging: false,
-      });
-      svgDataUrl = svgCanvas.toDataURL('image/png');
+      await new Promise(resolve => setTimeout(resolve, 100)); // Brief delay for rendering
+      const svgElement = tempSvgContainer.querySelector('svg');
+      if (svgElement) {
+        const svgCanvas = await html2canvas(svgElement, {
+          scale: 3, backgroundColor: null, useCORS: true, width: 64, height: 64, logging: false,
+        });
+        svgDataUrl = svgCanvas.toDataURL('image/png');
+      } else {
+          console.warn("SVG element for logo not found for PDF export.");
+      }
     } catch (e) { console.error("Error converting SVG logo to canvas image:", e); }
     finally { if (document.body.contains(tempSvgContainer)) document.body.removeChild(tempSvgContainer); }
 
     const drawPageHeader = (pdfInstance: jsPDF, logoUrl: string | null) => {
         const logoX = PAGE_MARGIN_MM;
-        const logoY = PAGE_MARGIN_MM; // Start drawing header content from top margin
+        const logoY = PAGE_MARGIN_MM;
         const logoHeightMm = 12;
         const logoWidthMm = 12;
         const headerTextSpacingMm = 3;
@@ -397,27 +403,24 @@ export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining
         pdfInstance.setFont(FONT_STYLE_NORMAL).setFontSize(FONT_SIZE_HEADER_TAGLINE).setTextColor(PDF_COLOR_MUTED_TEXT[0], PDF_COLOR_MUTED_TEXT[1], PDF_COLOR_MUTED_TEXT[2]);
         pdfInstance.text("Your Personal AI Travel Planner", textStartX, logoY + (logoHeightMm/2) + 5);
     };
-
+    
     const drawPageFooter = (pdfInstance: jsPDF, pageNum: number, totalPagesArg: string | number, isSecondPass: boolean = false) => {
         const footerLineY = PDF_PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM + 2;
-        const footerTextY = footerLineY + 5; // Text slightly below the line
+        const footerTextY = footerLineY + 5; 
         const generationTimestampStr = format(new Date(), "MMM d, yyyy, h:mm a");
         const pageNumText = `Page ${pageNum} of ${totalPagesArg}`;
+        
+        const textLineHeightMm = FONT_SIZE_FOOTER_TEXT * 0.352778 * 1.2;
+        const clearRegionY = footerTextY - (textLineHeightMm * 0.85);
+        const clearRegionHeight = textLineHeightMm * 1.2;
     
-        // On the second pass, clear the entire footer text line area before redrawing
         if (isSecondPass) {
-            const clearX = PAGE_MARGIN_MM;
-            const clearWidth = PDF_PAGE_WIDTH_MM - 2 * PAGE_MARGIN_MM;
-            const textLineHeightMm = FONT_SIZE_FOOTER_TEXT * 0.352778 * 1.2; // pt to mm, with line spacing
-            const clearY = footerTextY - (textLineHeightMm * 0.85) ; // Start clearing slightly above the baseline
-            const clearHeight = textLineHeightMm * 1.2; // Ensure full coverage of the text line
-    
             pdfInstance.setFillColor(255, 255, 255); // White
-            pdfInstance.rect(clearX, clearY, clearWidth, clearHeight, 'F');
-        } else { // First pass, draw the line
-            pdfInstance.setDrawColor(PDF_COLOR_LINE[0], PDF_COLOR_LINE[1], PDF_COLOR_LINE[2]);
-            pdfInstance.setLineWidth(0.3);
-            pdfInstance.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM, footerLineY);
+            pdfInstance.rect(PAGE_MARGIN_MM, clearRegionY, MAX_CONTENT_WIDTH_MM, clearRegionHeight, 'F');
+        } else {
+             pdfInstance.setDrawColor(PDF_COLOR_LINE[0], PDF_COLOR_LINE[1], PDF_COLOR_LINE[2]);
+             pdfInstance.setLineWidth(0.3);
+             pdfInstance.line(PAGE_MARGIN_MM, footerLineY, PDF_PAGE_WIDTH_MM - PAGE_MARGIN_MM, footerLineY);
         }
     
         pdfInstance.setFont(FONT_STYLE_NORMAL).setFontSize(FONT_SIZE_FOOTER_TEXT).setTextColor(PDF_COLOR_MUTED_TEXT[0], PDF_COLOR_MUTED_TEXT[1], PDF_COLOR_MUTED_TEXT[2]);
@@ -430,13 +433,13 @@ export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining
         const currentTextWidth = pdfInstance.getStringUnitWidth(pageNumText) * FONT_SIZE_FOOTER_TEXT / pdfInstance.internal.scaleFactor;
         pdfInstance.text(pageNumText, (PDF_PAGE_WIDTH_MM / 2) - (currentTextWidth / 2), footerTextY);
     };
-    
+        
     const checkAndAddNewPageIfNeeded = (neededHeight: number) => {
         if (yRef.current + neededHeight > MAX_Y_BEFORE_FOOTER_MM) {
             pdf.addPage();
             currentPageNumRef.current++;
             drawPageHeader(pdf, svgDataUrl);
-            drawPageFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder, false); // First pass for new page
+            drawPageFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder, false); 
             yRef.current = CONTENT_START_Y_MM;
             return true;
         }
@@ -514,7 +517,7 @@ export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining
     };
 
     drawPageHeader(pdf, svgDataUrl);
-    drawPageFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder, false); // First pass for initial page
+    drawPageFooter(pdf, currentPageNumRef.current, totalPagesPlaceholder, false);
 
     const itineraryLines = itinerary.split('\n');
     let isPreviousLineBlank = false;
@@ -617,7 +620,7 @@ export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining
     const finalTotalPages = currentPageNumRef.current;
     for (let pageIdx = 1; pageIdx <= finalTotalPages; pageIdx++) {
         pdf.setPage(pageIdx);
-        drawPageFooter(pdf, pageIdx, finalTotalPages.toString(), true); // Second pass for all pages
+        drawPageFooter(pdf, pageIdx, finalTotalPages.toString(), true); 
     }
 
     try {
@@ -682,7 +685,7 @@ export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining
             <CardDescription className="font-body">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
           </div>
           <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
-             {itinerary && destination && (
+             {itinerary && destination && itineraryId && (
               <Button
                 onClick={() => setIsChatOpen(true)}
                 variant="outline"
@@ -779,10 +782,11 @@ export function ItineraryDisplay({ itinerary, destination, isLoading, isRefining
             </ScrollArea>
         </CardContent>
       </Card>
-      {itinerary && destination && (
+      {itinerary && destination && itineraryId && (
         <ItineraryChatbot
           itineraryContent={itinerary}
           destination={destination}
+          itineraryId={itineraryId}
           isOpen={isChatOpen}
           onClose={() => setIsChatOpen(false)}
         />
