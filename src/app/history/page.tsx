@@ -8,12 +8,11 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import ProtectedRoute from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
-import { getItineraries as apiGetItineraries, deleteItinerary as apiDeleteItinerary, type ItineraryRecord } from "@/lib/itinerary-storage";
+import { getItineraries as apiGetItineraries, deleteItinerary as apiDeleteItinerary, deleteAllItinerariesForUser, type ItineraryRecord } from "@/lib/itinerary-storage";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2, Eye, CalendarClock, MapPin, Info } from "lucide-react";
+import { Trash2, Eye, CalendarClock, MapPin, Info, Trash } from "lucide-react";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
-// import { ItineraryDisplay } from "@/components/wander-ai/itinerary-display"; // Original import
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +69,14 @@ export default function HistoryPage() {
     }
   };
 
+  const handleClearAllHistory = () => {
+    if (currentUser?.email) {
+      deleteAllItinerariesForUser(currentUser.email);
+      fetchItineraries(); // Refresh the list, should be empty now
+      toast({ title: "History Cleared", description: "All your saved itineraries have been deleted.", className: "bg-primary text-primary-foreground" });
+    }
+  };
+
   const handleViewDetails = (itinerary: ItineraryRecord) => {
     setSelectedItinerary(itinerary);
   };
@@ -116,13 +123,40 @@ export default function HistoryPage() {
         <main className="flex-grow container mx-auto px-4 py-12 sm:px-6 lg:px-8">
           <Card className="w-full max-w-4xl mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle className="text-3xl font-headline text-primary flex items-center">
-                <CalendarClock className="mr-3 h-8 w-8" />
-                Your Itinerary History
-              </CardTitle>
-              <CardDescription className="font-body">
-                Review your past travel plans.
-              </CardDescription>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <CardTitle className="text-3xl font-headline text-primary flex items-center">
+                    <CalendarClock className="mr-3 h-8 w-8" />
+                    Your Itinerary History
+                  </CardTitle>
+                  <CardDescription className="font-body">
+                    Review your past travel plans.
+                  </CardDescription>
+                </div>
+                {itineraries.length > 0 && (
+                   <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" className="font-body w-full sm:w-auto">
+                        <Trash className="mr-2 h-4 w-4" /> Clear All History
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete all your saved itineraries.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearAllHistory}>
+                          Yes, delete all history
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {itineraries.length === 0 ? (
@@ -186,3 +220,4 @@ export default function HistoryPage() {
     </ProtectedRoute>
   );
 }
+
