@@ -1,3 +1,4 @@
+
 // src/app/profile/page.tsx
 "use client";
 
@@ -242,35 +243,6 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
               <div>
                 <p className="font-body text-sm text-muted-foreground mb-2">
-                  Clearing all app data will remove your user information, saved itineraries, and theme settings from this browser. This action cannot be undone.
-                </p>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="w-full font-body" disabled={isDeletingAccount || authLoading}>
-                      <Trash className="mr-2 h-5 w-5" /> Clear All App Data (This Browser)
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action will permanently delete all WanderAI data stored in this browser, including your account details and itinerary history. You will be logged out. This affects all users on this browser.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleClearAllData} className={buttonVariants({ variant: "destructive" })}>
-                        Yes, clear all data
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-
-              <Separator />
-
-              <div>
-                <p className="font-body text-sm text-muted-foreground mb-2">
                   Deleting your account will permanently remove your profile and all associated itinerary history. This action cannot be undone.
                 </p>
                 <AlertDialog>
@@ -300,6 +272,35 @@ export default function ProfilePage() {
                 </AlertDialog>
               </div>
 
+              <Separator />
+              
+              <div>
+                <p className="font-body text-sm text-muted-foreground mb-2">
+                  Clearing all WanderAI app data will remove user information, saved itineraries, and theme settings stored by WanderAI from this browser. This action cannot be undone and will affect all users of WanderAI on this browser.
+                </p>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full font-body" disabled={isDeletingAccount || authLoading}>
+                      <Trash className="mr-2 h-5 w-5" /> Clear All App Data (This Browser)
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action will permanently delete all WanderAI application data stored in this browser, including all user account details and itinerary history for WanderAI. You will be logged out. This affects all users of WanderAI on this browser.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleClearAllData} className={buttonVariants({ variant: "destructive" })}>
+                        Yes, clear all data
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+
             </CardContent>
           </Card>
 
@@ -309,3 +310,6 @@ export default function ProfilePage() {
     </ProtectedRoute>
   );
 }
+
+
+    
