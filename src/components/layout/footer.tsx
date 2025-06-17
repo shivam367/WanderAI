@@ -11,7 +11,7 @@ export function Footer() {
         <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
           <div className="flex items-center space-x-1">
             <Copyright className="h-4 w-4" />
-            <span>{new Date().getFullYear()} WanderAI. Created with Firebase Studio.</span>
+            <span>{new Date().getFullYear()} WanderAI. Your Personal AI Travel Planner.</span>
           </div>
           <div className="flex space-x-4">
             <Link href="mailto:contact@wanderai.app" target="_blank" rel="noopener noreferrer" aria-label="Contact via Email" className="hover:text-primary transition-colors">
