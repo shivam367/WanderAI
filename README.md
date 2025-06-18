@@ -61,7 +61,7 @@ You can obtain an API key from [Google AI Studio](https://aistudio.google.com/ap
 
 1.  Clone the repository:
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/shivam367/WanderAI.git
     cd wanderai-app
     ```
 2.  Install dependencies:
