@@ -138,7 +138,7 @@ export default function ProfilePage() {
           <Card className="w-full max-w-lg mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-3xl font-headline text-primary">Your Profile</CardTitle>
-              <CardDescription className="font-body">View and update your account details.</CardDescription>
+              <CardDescription className="font-body text-base">View and update your account details.</CardDescription>
             </CardHeader>
             <CardContent>
               {currentUser ? ( 
@@ -164,7 +164,7 @@ export default function ProfilePage() {
                       </FormControl>
                       <FormDescription className="font-body text-xs">Email address cannot be changed.</FormDescription>
                     </FormItem>
-                    <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-body py-3" disabled={isUpdatingProfile || authLoading}>
+                    <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-body py-3 text-base" disabled={isUpdatingProfile || authLoading}>
                       {isUpdatingProfile ? <LoadingSpinner size={20} /> : <><Save className="mr-2 h-5 w-5" /> Save Name Changes</>}
                     </Button>
                   </form>
@@ -221,14 +221,14 @@ export default function ProfilePage() {
                         </FormItem>
                       )}
                     />
-                    <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-body py-3" disabled={isChangingPassword || authLoading}>
+                    <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-body py-3 text-base" disabled={isChangingPassword || authLoading}>
                       {isChangingPassword ? <LoadingSpinner size={20} /> : <><Save className="mr-2 h-5 w-5" /> Update Password</>}
                     </Button>
                   </form>
                 </Form>
             </CardContent>
             <CardFooter className="pt-6 flex flex-col gap-4"> 
-              <Button variant="outline" onClick={logout} className="w-full text-destructive border-destructive hover:bg-destructive/10 font-body" disabled={isUpdatingProfile || isChangingPassword || authLoading || isDeletingAccount}>
+              <Button variant="outline" onClick={logout} className="w-full text-destructive border-destructive hover:bg-destructive/10 font-body text-base" disabled={isUpdatingProfile || isChangingPassword || authLoading || isDeletingAccount}>
                 <LogOut className="mr-2 h-5 w-5" /> Logout
               </Button>
             </CardFooter>
@@ -242,12 +242,12 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="font-body text-sm text-muted-foreground mb-2">
+                <p className="font-body text-base text-muted-foreground mb-2">
                   Deleting your account will permanently remove your profile and all associated itinerary history. This action cannot be undone.
                 </p>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="w-full font-body" disabled={isDeletingAccount || authLoading}>
+                    <Button variant="destructive" className="w-full font-body text-base" disabled={isDeletingAccount || authLoading}>
                       <UserX className="mr-2 h-5 w-5" /> Delete My Account
                     </Button>
                   </AlertDialogTrigger>
@@ -275,12 +275,12 @@ export default function ProfilePage() {
               <Separator />
               
               <div>
-                <p className="font-body text-sm text-muted-foreground mb-2">
+                <p className="font-body text-base text-muted-foreground mb-2">
                   Clearing all WanderAI app data will remove user information, saved itineraries, and theme settings stored by WanderAI from this browser. This action cannot be undone and will affect all users of WanderAI on this browser.
                 </p>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="w-full font-body" disabled={isDeletingAccount || authLoading}>
+                    <Button variant="destructive" className="w-full font-body text-base" disabled={isDeletingAccount || authLoading}>
                       <Trash className="mr-2 h-5 w-5" /> Clear All App Data (This Browser)
                     </Button>
                   </AlertDialogTrigger>

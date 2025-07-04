@@ -67,13 +67,13 @@ export function AuthForm() {
     <Card className="w-full max-w-md mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
       <CardHeader className="text-center">
         <CardTitle className="text-3xl font-headline text-primary">Welcome to WanderAI</CardTitle>
-        <CardDescription className="font-body">Access your personalized travel plans or create a new account.</CardDescription>
+        <CardDescription className="font-body text-base">Access your personalized travel plans or create a new account.</CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 bg-secondary/70">
-            <TabsTrigger value="login" className="font-body data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Login</TabsTrigger>
-            <TabsTrigger value="register" className="font-body data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Register</TabsTrigger>
+            <TabsTrigger value="login" className="font-body text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Login</TabsTrigger>
+            <TabsTrigger value="register" className="font-body text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Register</TabsTrigger>
           </TabsList>
           <TabsContent value="login">
             <Form {...loginForm}>
@@ -104,7 +104,7 @@ export function AuthForm() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-body py-3" disabled={isLoading}>
+                <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-body py-3 text-base" disabled={isLoading}>
                   {isLoading ? <LoadingSpinner size={20} /> : <><LogIn className="mr-2 h-5 w-5" /> Login</>}
                 </Button>
               </form>
@@ -165,7 +165,7 @@ export function AuthForm() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-body py-3" disabled={isLoading}>
+                <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-body py-3 text-base" disabled={isLoading}>
                  {isLoading ? <LoadingSpinner size={20} /> : "Create Account"}
                 </Button>
               </form>

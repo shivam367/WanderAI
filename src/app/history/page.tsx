@@ -140,7 +140,7 @@ export default function HistoryPage() {
                 setCurrentItineraryDetailsForRefine(null);
               }} 
               variant="outline" 
-              className="mb-6 font-body"
+              className="mb-6 font-body text-base"
             >
               &larr; Back to History
             </Button>
@@ -175,14 +175,14 @@ export default function HistoryPage() {
                     <CalendarClock className="mr-3 h-8 w-8" />
                     Your Itinerary History
                   </CardTitle>
-                  <CardDescription className="font-body">
+                  <CardDescription className="font-body text-base">
                     Review, refine, and chat about your past travel plans.
                   </CardDescription>
                 </div>
                 {itineraries.length > 0 && (
                    <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" className="font-body w-full sm:w-auto">
+                      <Button variant="destructive" size="sm" className="font-body text-base w-full sm:w-auto">
                         <Trash className="mr-2 h-4 w-4" /> Clear All History
                       </Button>
                     </AlertDialogTrigger>
@@ -219,30 +219,30 @@ export default function HistoryPage() {
                         <CardTitle className="font-headline text-xl text-primary flex items-center">
                            <MapPin className="mr-2 h-5 w-5 shrink-0" /> {itinerary.destination || "Untitled Itinerary"}
                         </CardTitle>
-                        <CardDescription className="font-body text-sm text-muted-foreground">
+                        <CardDescription className="font-body text-base text-muted-foreground">
                           Generated on: {format(new Date(itinerary.generatedDate), "MMMM d, yyyy 'at' h:mm a")}
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="font-body">
-                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mb-2">
+                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-base text-muted-foreground mb-2">
                            <span className="flex items-center"><Users className="mr-1.5 h-4 w-4"/>{itinerary.numberOfPersons || 'N/A'} {itinerary.numberOfPersons === 1 ? 'person' : 'people'}</span>
                            <span className="flex items-center"><Calendar className="mr-1.5 h-4 w-4"/>{itinerary.duration || 'N/A'} days</span>
                            <span className="flex items-center"><Wallet className="mr-1.5 h-4 w-4"/>{itinerary.budgetAmount || 'N/A'} {itinerary.currency || ''}</span>
                          </div>
-                        <p className="text-sm text-muted-foreground truncate">
+                        <p className="text-base text-muted-foreground truncate">
                           <span className="font-medium">Interests:</span> {itinerary.interests || 'N/A'}
                         </p>
-                        <p className="line-clamp-2 text-foreground/80 mt-2">
+                        <p className="line-clamp-2 text-foreground/80 mt-2 text-base">
                           {itinerary.content.substring(0, 150) + (itinerary.content.length > 150 ? "..." : "")}
                         </p>
                       </CardContent>
                       <CardFooter className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleViewDetails(itinerary)} className="font-body text-primary border-primary hover:bg-primary/10">
+                        <Button variant="outline" size="sm" onClick={() => handleViewDetails(itinerary)} className="font-body text-base text-primary border-primary hover:bg-primary/10">
                           <Eye className="mr-2 h-4 w-4" /> View, Refine & Chat
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" className="font-body">
+                            <Button variant="destructive" size="sm" className="font-body text-base">
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </Button>
                           </AlertDialogTrigger>
