@@ -1,3 +1,4 @@
+
 // src/components/wander-ai/itinerary-display.tsx
 "use client";
 
@@ -682,7 +683,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
               <BookOpenText className="h-8 w-8" />
               Your Custom Itinerary
             </CardTitle>
-            <CardDescription className="font-body text-base">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
+            <CardDescription className="font-body text-lg">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
           </div>
           <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
              {itinerary && destination && itineraryId && (
@@ -710,7 +711,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
             <Card className="mb-6 bg-secondary/50 p-2 sm:p-4 md:p-6 animate-fade-in">
               <CardHeader>
                 <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Sparkles className="h-6 w-6"/>Refine Your Itinerary</CardTitle>
-                <CardDescription className="font-body text-base">Provide feedback on what you'd like to change or add.</CardDescription>
+                <CardDescription className="font-body text-lg">Provide feedback on what you'd like to change or add.</CardDescription>
               </CardHeader>
               <CardContent>
                 <Form {...refineForm}>
@@ -718,7 +719,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
                     <FormField control={refineForm.control} name="userFeedback" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="font-body text-base">Your Feedback</FormLabel>
-                        <FormControl><Textarea placeholder="e.g., 'Add more vegetarian food options', 'Include a visit to Eiffel Tower on Day 2'" {...field} className="min-h-[120px] font-body text-base" /></FormControl>
+                        <FormControl><Textarea placeholder="e.g., 'Add more vegetarian food options', 'Include a visit to Eiffel Tower on Day 2'" {...field} className="min-h-[120px] font-body" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
@@ -745,7 +746,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
                           <AccordionItem value={sectionHtmlId} className="mb-1 border-b-0 last:mb-0">
                               <Card id={sectionHtmlId} className="shadow-sm overflow-hidden bg-background/90 text-foreground my-1">
                                   <AccordionTrigger className="p-3 hover:no-underline hover:bg-secondary/30 transition-colors rounded-t-lg w-full">
-                                      <h3 className="text-lg font-headline font-semibold text-primary flex items-center">
+                                      <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
                                       <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
                                       {section.title}
                                       </h3>
@@ -760,7 +761,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
                   } else {
                       return (
                           <Card id={sectionHtmlId} key={sectionHtmlId} className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
-                              <h3 className="text-lg font-headline font-semibold text-primary mb-2 flex items-center">
+                              <h3 className="text-xl font-headline font-semibold text-primary mb-2 flex items-center">
                                   <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
                                   {section.title}
                               </h3>
