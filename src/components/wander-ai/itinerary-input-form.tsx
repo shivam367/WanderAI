@@ -1,4 +1,3 @@
-
 // src/components/wander-ai/itinerary-input-form.tsx
 "use client";
 
@@ -228,9 +227,9 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
               name="destination"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center font-body"><MapPin className="mr-2 h-4 w-4 text-primary" />Destination</FormLabel>
+                  <FormLabel className="flex items-center font-body md:text-base"><MapPin className="mr-2 h-4 w-4 text-primary" />Destination</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Paris, France" {...field} className="font-body" />
+                    <Input placeholder="e.g., Paris, France" {...field} className="font-body md:text-base" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -242,13 +241,13 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
               name="interests"
               render={({ field }) => (
                 <FormItem className="relative">
-                  <FormLabel className="flex items-center font-body mb-2"><Sparkles className="mr-2 h-4 w-4 text-primary" />Interests & Activities</FormLabel>
+                  <FormLabel className="flex items-center font-body mb-2 md:text-base"><Sparkles className="mr-2 h-4 w-4 text-primary" />Interests & Activities</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="e.g., Museums, local cuisine, hiking. Type for AI suggestions..."
                       {...field}
                       ref={interestsTextareaRef}
-                      className="font-body min-h-[80px]"
+                      className="font-body min-h-[80px] md:text-base"
                       onFocus={() => {
                         // Show suggestions if any exist and query is long enough
                          const fullQuery = form.getValues("interests");
@@ -280,7 +279,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
             />
 
             <div className="space-y-2">
-                <FormLabel className="text-sm font-medium text-muted-foreground font-body flex items-center">
+                <FormLabel className="text-sm md:text-base font-medium text-muted-foreground font-body flex items-center">
                     Or tap to add common interests:
                 </FormLabel>
                 <div className="flex flex-wrap gap-2">
@@ -313,10 +312,10 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                 name="currency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center font-body"><DollarSign className="mr-2 h-4 w-4 text-primary" />Currency</FormLabel>
+                    <FormLabel className="flex items-center font-body md:text-base"><DollarSign className="mr-2 h-4 w-4 text-primary" />Currency</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="font-body">
+                        <SelectTrigger className="font-body md:text-base">
                           <SelectValue placeholder="Select currency" />
                         </SelectTrigger>
                       </FormControl>
@@ -337,9 +336,9 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                 name="budgetAmount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center font-body"><Wallet className="mr-2 h-4 w-4 text-primary" />Budget Amount</FormLabel>
+                    <FormLabel className="flex items-center font-body md:text-base"><Wallet className="mr-2 h-4 w-4 text-primary" />Budget Amount</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 1500" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} className="font-body" />
+                      <Input type="number" placeholder="e.g., 1500" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} className="font-body md:text-base" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -350,9 +349,9 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                 name="duration"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center font-body"><CalendarDays className="mr-2 h-4 w-4 text-primary" />Duration (days)</FormLabel>
+                    <FormLabel className="flex items-center font-body md:text-base"><CalendarDays className="mr-2 h-4 w-4 text-primary" />Duration (days)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 7" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="font-body" />
+                      <Input type="number" placeholder="e.g., 7" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="font-body md:text-base" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -363,9 +362,9 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                 name="numberOfPersons"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center font-body"><Users className="mr-2 h-4 w-4 text-primary" />Number of Persons</FormLabel>
+                    <FormLabel className="flex items-center font-body md:text-base"><Users className="mr-2 h-4 w-4 text-primary" />Number of Persons</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 2" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="font-body" />
+                      <Input type="number" placeholder="e.g., 2" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="font-body md:text-base" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
