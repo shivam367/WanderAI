@@ -25,21 +25,21 @@ export function Header() {
           {currentUser ? (
             <>
               <Button variant="ghost" asChild>
-                <Link href="/dashboard" className="font-body flex items-center text-sm md:text-base">
+                <Link href="/dashboard" className="font-body flex items-center text-base">
                   <LayoutDashboard className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Dashboard</span>
                 </Link>
               </Button>
               <Button variant="ghost" asChild>
-                <Link href="/history" className="font-body flex items-center text-sm md:text-base">
+                <Link href="/history" className="font-body flex items-center text-base">
                   <History className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">History</span>
                 </Link>
               </Button>
               <Button variant="ghost" asChild>
-                <Link href="/profile" className="font-body flex items-center text-sm md:text-base">
+                <Link href="/profile" className="font-body flex items-center text-base">
                   <UserCog className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Profile</span>
                 </Link>
               </Button>
-              <Button variant="outline" onClick={logout} className="border-destructive text-destructive hover:bg-destructive/10 font-body flex items-center text-sm md:text-base">
+              <Button variant="outline" onClick={logout} className="border-destructive text-destructive hover:bg-destructive/10 font-body flex items-center text-base">
                 <LogOut className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Logout</span>
               </Button>
             </>
