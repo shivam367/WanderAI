@@ -39,6 +39,7 @@ export default function DashboardPage() {
           budgetAmount: inputDetails.budgetAmount,
           duration: inputDetails.duration,
           interests: inputDetails.interests,
+          numberOfPersons: inputDetails.numberOfPersons,
         });
         setCurrentItineraryId(savedRecord.id); // Set ID after saving
       } catch (saveError) {
@@ -67,6 +68,7 @@ export default function DashboardPage() {
           budgetAmount: currentGenerationDetails.budgetAmount,
           duration: currentGenerationDetails.duration,
           interests: currentGenerationDetails.interests,
+          numberOfPersons: currentGenerationDetails.numberOfPersons,
         });
         setCurrentItineraryId(savedRecord.id); // Set new ID for refined version
         toast({ title: "Refined Itinerary Saved", description: "Your refined itinerary has been saved to your history.", className: "bg-primary text-primary-foreground" });

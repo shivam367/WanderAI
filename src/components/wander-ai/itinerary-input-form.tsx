@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ItineraryInputSchema, type ItineraryInput } from "@/lib/schemas";
 import { generateItinerary, type GenerateItineraryInput as AIInputType } from "@/ai/flows/generate-itinerary";
 import { suggestInterests, type SuggestInterestsInput } from "@/ai/flows/suggest-interests-flow";
-import { Wand2, MapPin, Sparkles, DollarSign, Wallet, CalendarDays, CheckCircle, Circle, Search } from "lucide-react";
+import { Wand2, MapPin, Sparkles, DollarSign, Wallet, CalendarDays, CheckCircle, Circle, Search, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import type React from "react";
@@ -54,6 +54,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
       currency: "USD",
       budgetAmount: 1000,
       duration: 7,
+      numberOfPersons: 2,
     },
   });
 
@@ -191,6 +192,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
         currency: data.currency,
         budgetAmount: Number(data.budgetAmount),
         duration: Number(data.duration),
+        numberOfPersons: Number(data.numberOfPersons),
       };
       const result = await generateItinerary(aiInput);
       onItineraryGenerated(result.itinerary, data);
@@ -305,7 +307,7 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="currency"
@@ -351,6 +353,19 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
                     <FormLabel className="flex items-center font-body"><CalendarDays className="mr-2 h-4 w-4 text-primary" />Duration (days)</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="e.g., 7" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="font-body" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="numberOfPersons"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center font-body"><Users className="mr-2 h-4 w-4 text-primary" />Number of Persons</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g., 2" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} className="font-body" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
