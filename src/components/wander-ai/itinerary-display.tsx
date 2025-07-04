@@ -188,7 +188,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
     const flushList = () => {
       if (currentListItemGroup.length > 0) {
         elements.push(
-          <ul key={`ul-${elements.length}-${Date.now()}`} className="list-disc list-inside pl-4 my-2 space-y-1 font-body text-foreground/90 text-base">
+          <ul key={`ul-${elements.length}-${Date.now()}`} className="list-disc list-inside pl-4 my-2 space-y-1 font-body text-foreground/90 text-lg">
             {currentListItemGroup.map((listItemNodes, idx) => (
               <li key={`li-item-${elements.length}-${idx}-${Date.now()}`}>{listItemNodes}</li>
             ))}
@@ -214,7 +214,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
             const subheadingTitle = match[1].trim();
             const { icon: IconComponent } = sectionKeywordsForHtmlDisplay[keyword];
             elements.push(
-              <h4 key={`subhead-${elements.length}-${lineIdx}-${Date.now()}`} className="text-lg font-headline font-semibold text-primary/80 mt-4 mb-1.5 flex items-center">
+              <h4 key={`subhead-${elements.length}-${lineIdx}-${Date.now()}`} className="text-xl font-headline font-semibold text-primary/80 mt-4 mb-1.5 flex items-center">
                 <IconComponent className="mr-2 h-5 w-5 text-primary/70 shrink-0" />
                 {subheadingTitle}
               </h4>
@@ -258,7 +258,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
         flushList();
         if (lineContentForProcessing.trim()) {
             elements.push(
-              <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line text-base">
+              <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line text-lg">
                 {processLineForBoldHtml(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
               </p>
             );
@@ -271,7 +271,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
     flushList();
 
     if (elements.length === 0 && contentLines.some(l => l.trim() !== '')) {
-        return [<p key={`raw-fallback-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line text-base">{contentLines.join('\n')}</p>];
+        return [<p key={`raw-fallback-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line text-lg">{contentLines.join('\n')}</p>];
     } else if (elements.length === 0) {
         return [<p key={`no-content-available-${Date.now()}`} className="text-muted-foreground font-body my-2">No content available for this section.</p>];
     }
@@ -746,7 +746,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
                           <AccordionItem value={sectionHtmlId} className="mb-1 border-b-0 last:mb-0">
                               <Card id={sectionHtmlId} className="shadow-sm overflow-hidden bg-background/90 text-foreground my-1">
                                   <AccordionTrigger className="p-3 hover:no-underline hover:bg-secondary/30 transition-colors rounded-t-lg w-full">
-                                      <h3 className="text-xl font-headline font-semibold text-primary flex items-center">
+                                      <h3 className="text-2xl font-headline font-semibold text-primary flex items-center">
                                       <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
                                       {section.title}
                                       </h3>
@@ -761,7 +761,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
                   } else {
                       return (
                           <Card id={sectionHtmlId} key={sectionHtmlId} className="mb-1 p-3 shadow-sm bg-background/90 text-foreground">
-                              <h3 className="text-xl font-headline font-semibold text-primary mb-2 flex items-center">
+                              <h3 className="text-2xl font-headline font-semibold text-primary mb-2 flex items-center">
                                   <section.icon className="mr-2 h-5 w-5 text-primary/80 shrink-0" />
                                   {section.title}
                               </h3>
