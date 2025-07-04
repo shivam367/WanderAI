@@ -187,7 +187,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
     const flushList = () => {
       if (currentListItemGroup.length > 0) {
         elements.push(
-          <ul key={`ul-${elements.length}-${Date.now()}`} className="list-disc list-inside pl-4 my-2 space-y-1 font-body text-foreground/90">
+          <ul key={`ul-${elements.length}-${Date.now()}`} className="list-disc list-inside pl-4 my-2 space-y-1 font-body text-foreground/90 md:text-base">
             {currentListItemGroup.map((listItemNodes, idx) => (
               <li key={`li-item-${elements.length}-${idx}-${Date.now()}`}>{listItemNodes}</li>
             ))}
@@ -257,7 +257,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
         flushList();
         if (lineContentForProcessing.trim()) {
             elements.push(
-              <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">
+              <p key={`p-${elements.length}-line-${lineIdx}-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line md:text-base">
                 {processLineForBoldHtml(lineContentForProcessing, `p-content-${elements.length}-line-${lineIdx}`)}
               </p>
             );
@@ -270,7 +270,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
     flushList();
 
     if (elements.length === 0 && contentLines.some(l => l.trim() !== '')) {
-        return [<p key={`raw-fallback-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line">{contentLines.join('\n')}</p>];
+        return [<p key={`raw-fallback-${Date.now()}`} className="text-foreground/90 font-body my-2 leading-relaxed whitespace-pre-line md:text-base">{contentLines.join('\n')}</p>];
     } else if (elements.length === 0) {
         return [<p key={`no-content-available-${Date.now()}`} className="text-muted-foreground font-body my-2">No content available for this section.</p>];
     }
@@ -682,7 +682,7 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
               <BookOpenText className="h-8 w-8" />
               Your Custom Itinerary
             </CardTitle>
-            <CardDescription className="font-body">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
+            <CardDescription className="font-body md:text-base">Here's your AI-generated travel plan. Review, refine, or export it!</CardDescription>
           </div>
           <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
              {itinerary && destination && itineraryId && (
@@ -710,15 +710,15 @@ export function ItineraryDisplay({ itinerary, itineraryId, destination, isLoadin
             <Card className="mb-6 bg-secondary/50 p-2 sm:p-4 md:p-6 animate-fade-in">
               <CardHeader>
                 <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Sparkles className="h-6 w-6"/>Refine Your Itinerary</CardTitle>
-                <CardDescription className="font-body">Provide feedback on what you'd like to change or add.</CardDescription>
+                <CardDescription className="font-body md:text-base">Provide feedback on what you'd like to change or add.</CardDescription>
               </CardHeader>
               <CardContent>
                 <Form {...refineForm}>
                   <form onSubmit={refineForm.handleSubmit(onRefineSubmit)} className="space-y-4">
                     <FormField control={refineForm.control} name="userFeedback" render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="font-body">Your Feedback</FormLabel>
-                        <FormControl><Textarea placeholder="e.g., 'Add more vegetarian food options', 'Include a visit to Eiffel Tower on Day 2'" {...field} className="min-h-[120px] font-body" /></FormControl>
+                        <FormLabel className="font-body md:text-base">Your Feedback</FormLabel>
+                        <FormControl><Textarea placeholder="e.g., 'Add more vegetarian food options', 'Include a visit to Eiffel Tower on Day 2'" {...field} className="min-h-[120px] font-body md:text-base" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
