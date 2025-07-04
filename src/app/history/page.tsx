@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getItineraries as apiGetItineraries, deleteItinerary as apiDeleteItinerary, deleteAllItinerariesForUser, saveItinerary as apiSaveItinerary, type ItineraryRecord } from "@/lib/itinerary-storage";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2, Eye, CalendarClock, MapPin, Info, Trash } from "lucide-react";
+import { Trash2, Eye, CalendarClock, MapPin, Info, Trash, Users, Wallet, Calendar, DollarSign } from "lucide-react";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import {
   AlertDialog,
@@ -224,11 +224,13 @@ export default function HistoryPage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="font-body">
-                         <p className="text-sm text-muted-foreground">
-                          Duration: {itinerary.duration || 'N/A'} days, Budget: {itinerary.budgetAmount || 'N/A'} {itinerary.currency || ''}
-                        </p>
+                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mb-2">
+                           <span className="flex items-center"><Users className="mr-1.5 h-4 w-4"/>{itinerary.numberOfPersons || 'N/A'} {itinerary.numberOfPersons === 1 ? 'person' : 'people'}</span>
+                           <span className="flex items-center"><Calendar className="mr-1.5 h-4 w-4"/>{itinerary.duration || 'N/A'} days</span>
+                           <span className="flex items-center"><Wallet className="mr-1.5 h-4 w-4"/>{itinerary.budgetAmount || 'N/A'} {itinerary.currency || ''}</span>
+                         </div>
                         <p className="text-sm text-muted-foreground truncate">
-                          Interests: {itinerary.interests || 'N/A'}
+                          <span className="font-medium">Interests:</span> {itinerary.interests || 'N/A'}
                         </p>
                         <p className="line-clamp-2 text-foreground/80 mt-2">
                           {itinerary.content.substring(0, 150) + (itinerary.content.length > 150 ? "..." : "")}

@@ -19,6 +19,7 @@ const GenerateItineraryInputSchema = z.object({
   currency: z.string().describe('The preferred currency for budget calculations (e.g., USD, EUR).'),
   budgetAmount: z.number().describe('The budget amount for the trip.'),
   duration: z.number().describe('The duration of the trip in days.'),
+  numberOfPersons: z.number().describe('The number of people traveling.'),
 });
 export type GenerateItineraryInput = z.infer<typeof GenerateItineraryInputSchema>;
 
@@ -47,6 +48,9 @@ Interests: {{{interests}}}
 Currency: {{{currency}}}
 Budget: {{{budgetAmount}}} {{{currency}}}
 Duration: {{{duration}}} days
+Number of Persons: {{{numberOfPersons}}}
+
+Please tailor your suggestions for activities, food, and accommodation to be suitable for a group of {{{numberOfPersons}}} people. For example, if there are more than 2 people, suggest group-friendly activities or restaurants, and mention appropriate hotel room options (e.g., family rooms, connecting rooms).
 
 Create a detailed day-by-day itinerary including:
 - Suggested activities and attractions
@@ -106,4 +110,3 @@ const generateItineraryFlow = ai.defineFlow(
     return output!;
   }
 );
-

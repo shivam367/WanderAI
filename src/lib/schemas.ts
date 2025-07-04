@@ -9,6 +9,7 @@ export const ItineraryInputSchema = z.object({
   }),
   budgetAmount: z.coerce.number().positive("Budget must be a positive number.").max(1000000, "Budget seems too high."),
   duration: z.coerce.number().int().min(1, "Duration must be at least 1 day.").max(90, "Duration cannot exceed 90 days."),
+  numberOfPersons: z.coerce.number().int().min(1, "There must be at least 1 person.").max(50, "For groups larger than 50, please contact a travel agent."),
 });
 
 export type ItineraryInput = z.infer<typeof ItineraryInputSchema>;

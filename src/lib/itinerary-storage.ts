@@ -12,6 +12,7 @@ export interface ItineraryRecord {
   budgetAmount?: number;
   duration?: number;
   interests?: string;
+  numberOfPersons?: number;
 }
 
 // --- Itinerary Storage ---
