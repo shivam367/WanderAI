@@ -24,32 +24,32 @@ export function Header() {
           {currentUser ? (
             <>
               <Button variant="ghost" asChild>
-                <Link href="/dashboard" className="font-body flex items-center text-lg">
-                  <LayoutDashboard className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Dashboard</span>
+                <Link href="/dashboard" className="font-body flex items-center text-xl">
+                  <LayoutDashboard className="mr-0 md:mr-2 h-6 w-6" /> <span className="hidden md:inline">Dashboard</span>
                 </Link>
               </Button>
               <Button variant="ghost" asChild>
-                <Link href="/history" className="font-body flex items-center text-lg">
-                  <History className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">History</span>
+                <Link href="/history" className="font-body flex items-center text-xl">
+                  <History className="mr-0 md:mr-2 h-6 w-6" /> <span className="hidden md:inline">History</span>
                 </Link>
               </Button>
               <Button variant="ghost" asChild>
-                <Link href="/profile" className="font-body flex items-center text-lg">
-                  <UserCog className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Profile</span>
+                <Link href="/profile" className="font-body flex items-center text-xl">
+                  <UserCog className="mr-0 md:mr-2 h-6 w-6" /> <span className="hidden md:inline">Profile</span>
                 </Link>
               </Button>
-              <Button variant="outline" onClick={logout} className="border-destructive text-destructive hover:bg-destructive/10 font-body flex items-center text-lg">
-                <LogOut className="mr-0 md:mr-2 h-5 w-5" /> <span className="hidden md:inline">Logout</span>
+              <Button variant="outline" onClick={logout} className="border-destructive text-destructive hover:bg-destructive/10 font-body flex items-center text-xl">
+                <LogOut className="mr-0 md:mr-2 h-6 w-6" /> <span className="hidden md:inline">Logout</span>
               </Button>
             </>
           ) : (
             <>
               <Button variant="ghost" asChild>
-                <Link href="/auth" className="font-body text-lg">Plan New Trip</Link>
+                <Link href="/auth" className="font-body text-xl">Plan New Trip</Link>
               </Button>
               <Button variant="outline" asChild className="border-primary text-primary hover:bg-primary/10">
-                <Link href="/auth" className="font-body flex items-center text-lg">
-                  <UserCircle className="mr-2 h-5 w-5" />
+                <Link href="/auth" className="font-body flex items-center text-xl">
+                  <UserCircle className="mr-2 h-6 w-6" />
                   Login / Sign Up
                 </Link>
               </Button>
