@@ -60,7 +60,7 @@ export default function HomePage() {
                   <Sparkles className="h-8 w-8 text-primary-foreground" />
                 </div>
                 <h4 className="text-xl font-semibold font-headline text-primary mb-2">Personalized Itineraries</h4>
-                <p className="text-foreground/80 font-body text-sm">
+                <p className="text-foreground/80 font-body text-base">
                   Tell us your destination, interests, budget, and trip duration. Our AI crafts a unique plan just for you.
                 </p>
               </div>
@@ -69,7 +69,7 @@ export default function HomePage() {
                   <Lightbulb className="h-8 w-8 text-accent-foreground" />
                 </div>
                 <h4 className="text-xl font-semibold font-headline text-primary mb-2">Smart Suggestions</h4>
-                <p className="text-foreground/80 font-body text-sm">
+                <p className="text-foreground/80 font-body text-base">
                   Discover hidden gems, top attractions, and local favorites based on intelligent recommendations.
                 </p>
               </div>
@@ -78,7 +78,7 @@ export default function HomePage() {
                   <Edit3 className="h-8 w-8 text-secondary-foreground" />
                 </div>
                 <h4 className="text-xl font-semibold font-headline text-primary mb-2">Easy Refinement</h4>
-                <p className="text-foreground/80 font-body text-sm">
+                <p className="text-foreground/80 font-body text-base">
                   Not quite perfect? Provide feedback and let the AI quickly adjust your itinerary until it's just right.
                 </p>
               </div>
