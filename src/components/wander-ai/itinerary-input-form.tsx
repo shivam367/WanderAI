@@ -212,11 +212,11 @@ export function ItineraryInputForm({ onItineraryGenerated, setIsLoading, isLoadi
   return (
     <Card className="w-full max-w-2xl mx-auto shadow-xl bg-card/80 backdrop-blur-sm" id="generate">
       <CardHeader className="text-center">
-        <CardTitle className="text-3xl font-headline text-primary flex items-center justify-center gap-2">
+        <CardTitle className="text-4xl font-headline text-primary flex items-center justify-center gap-2">
           <Wand2 className="h-8 w-8" />
           Create Your Dream Trip
         </CardTitle>
-        <CardDescription className="font-body">
+        <CardDescription className="font-body text-lg">
           Tell us your preferences, and our AI will craft a personalized itinerary for you.
         </CardDescription>
       </CardHeader>
