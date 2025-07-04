@@ -135,106 +135,115 @@ export default function ProfilePage() {
       <div className="flex flex-col min-h-screen bg-background">
         <Header />
         <main className="flex-grow container mx-auto px-4 py-12 sm:px-6 lg:px-8 flex flex-col items-center justify-center gap-8">
-          <Card className="w-full max-w-lg mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-3xl font-headline text-primary">Your Profile</CardTitle>
-              <CardDescription className="font-body text-base">View and update your account details.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {currentUser ? ( 
-                <Form {...profileForm}>
-                  <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
-                    <FormField
-                      control={profileForm.control}
-                      name="name"
-                      render={({ field }) => (
+          
+          <Card className="w-full max-w-4xl mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x md:divide-border">
+              {/* Left Column: Profile */}
+              <div className="p-6">
+                <CardHeader className="p-0 mb-6">
+                  <CardTitle className="text-3xl font-headline text-primary">Your Profile</CardTitle>
+                  <CardDescription className="font-body text-base">View and update your account details.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {currentUser ? ( 
+                    <Form {...profileForm}>
+                      <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
+                        <FormField
+                          control={profileForm.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center font-body"><User className="mr-2 h-4 w-4 text-primary" />Full Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Your Name" {...field} className="font-body" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                         <FormItem>
-                          <FormLabel className="flex items-center font-body"><User className="mr-2 h-4 w-4 text-primary" />Full Name</FormLabel>
+                          <FormLabel className="flex items-center font-body"><Mail className="mr-2 h-4 w-4 text-primary" />Email Address</FormLabel>
                           <FormControl>
-                            <Input placeholder="Your Name" {...field} className="font-body" />
+                            <Input type="email" value={currentUser.email} readOnly disabled className="font-body bg-muted/50" />
                           </FormControl>
-                          <FormMessage />
+                          <FormDescription className="font-body text-xs">Email address cannot be changed.</FormDescription>
                         </FormItem>
-                      )}
-                    />
-                    <FormItem>
-                      <FormLabel className="flex items-center font-body"><Mail className="mr-2 h-4 w-4 text-primary" />Email Address</FormLabel>
-                      <FormControl>
-                        <Input type="email" value={currentUser.email} readOnly disabled className="font-body bg-muted/50" />
-                      </FormControl>
-                      <FormDescription className="font-body text-xs">Email address cannot be changed.</FormDescription>
-                    </FormItem>
-                    <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-body py-3 text-base" disabled={isUpdatingProfile || authLoading}>
-                      {isUpdatingProfile ? <LoadingSpinner size={20} /> : <><Save className="mr-2 h-5 w-5" /> Save Name Changes</>}
-                    </Button>
-                  </form>
-                </Form>
-              ) : (
-                <LoadingSpinner size={32} text="Verifying user..." />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="w-full max-w-lg mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-2xl font-headline text-primary">Change Password</CardTitle>
-            </CardHeader>
-            <CardContent>
-               <Form {...passwordForm}>
-                  <form onSubmit={passwordForm.handleSubmit(onChangePasswordSubmit)} className="space-y-6">
-                    <FormField
-                      control={passwordForm.control}
-                      name="currentPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center font-body"><KeyRound className="mr-2 h-4 w-4 text-primary" />Current Password</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="Enter current password" {...field} className="font-body" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                     <FormField
-                      control={passwordForm.control}
-                      name="newPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center font-body"><KeyRound className="mr-2 h-4 w-4 text-primary" />New Password</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="Enter new password" {...field} className="font-body" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                     <FormField
-                      control={passwordForm.control}
-                      name="confirmNewPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center font-body"><KeyRound className="mr-2 h-4 w-4 text-primary" />Confirm New Password</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="Confirm new password" {...field} className="font-body" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-body py-3 text-base" disabled={isChangingPassword || authLoading}>
-                      {isChangingPassword ? <LoadingSpinner size={20} /> : <><Save className="mr-2 h-5 w-5" /> Update Password</>}
-                    </Button>
-                  </form>
-                </Form>
-            </CardContent>
-            <CardFooter className="pt-6 flex flex-col gap-4"> 
-              <Button variant="outline" onClick={logout} className="w-full text-destructive border-destructive hover:bg-destructive/10 font-body text-base" disabled={isUpdatingProfile || isChangingPassword || authLoading || isDeletingAccount}>
+                        <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-body py-3 text-base" disabled={isUpdatingProfile || authLoading}>
+                          {isUpdatingProfile ? <LoadingSpinner size={20} /> : <><Save className="mr-2 h-5 w-5" /> Save Name Changes</>}
+                        </Button>
+                      </form>
+                    </Form>
+                  ) : (
+                    <LoadingSpinner size={32} text="Verifying user..." />
+                  )}
+                </CardContent>
+              </div>
+              
+              {/* Right Column: Password */}
+              <div className="p-6">
+                <CardHeader className="p-0 mb-6">
+                  <CardTitle className="text-2xl font-headline text-primary">Change Password</CardTitle>
+                   <CardDescription className="font-body text-base">Update your account password.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                   <Form {...passwordForm}>
+                      <form onSubmit={passwordForm.handleSubmit(onChangePasswordSubmit)} className="space-y-6">
+                        <FormField
+                          control={passwordForm.control}
+                          name="currentPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center font-body"><KeyRound className="mr-2 h-4 w-4 text-primary" />Current Password</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="Enter current password" {...field} className="font-body" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         <FormField
+                          control={passwordForm.control}
+                          name="newPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center font-body"><KeyRound className="mr-2 h-4 w-4 text-primary" />New Password</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="Enter new password" {...field} className="font-body" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         <FormField
+                          control={passwordForm.control}
+                          name="confirmNewPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center font-body"><KeyRound className="mr-2 h-4 w-4 text-primary" />Confirm New Password</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="Confirm new password" {...field} className="font-body" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-body py-3 text-base" disabled={isChangingPassword || authLoading}>
+                          {isChangingPassword ? <LoadingSpinner size={20} /> : <><Save className="mr-2 h-5 w-5" /> Update Password</>}
+                        </Button>
+                      </form>
+                    </Form>
+                </CardContent>
+              </div>
+            </div>
+            <CardFooter className="p-6 border-t flex justify-end"> 
+              <Button variant="outline" onClick={logout} className="text-destructive border-destructive hover:bg-destructive/10 font-body text-base" disabled={isUpdatingProfile || isChangingPassword || authLoading || isDeletingAccount}>
                 <LogOut className="mr-2 h-5 w-5" /> Logout
               </Button>
             </CardFooter>
           </Card>
 
-          <Card className="w-full max-w-lg mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
+
+          <Card className="w-full max-w-4xl mx-auto shadow-xl bg-card/80 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-2xl font-headline text-destructive flex items-center">
                 <AlertTriangle className="mr-2 h-6 w-6" /> Danger Zone
