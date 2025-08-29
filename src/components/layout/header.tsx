@@ -52,7 +52,7 @@ export function Header() {
               </Button>
               <Button variant="outline" asChild className="border-primary text-primary hover:bg-primary/10">
                 <Link href="/auth" className="font-body flex items-center text-xl">
-                  <UserCircle className="mr-2 h-6 w-6" />
+                  <UserCircle className="mr-0 h-6 w-6 md:mr-2" />
                   <span className="hidden md:inline">Login / Sign Up</span>
                   <span className="inline md:hidden">Login</span>
                 </Link>
