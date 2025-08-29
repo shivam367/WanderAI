@@ -1,3 +1,4 @@
+
 // src/app/auth/page.tsx
 "use client"; // Required for useEffect and useRouter
 

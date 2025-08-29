@@ -1,3 +1,4 @@
+
 // src/app/page.tsx
 "use client";
 
@@ -14,7 +15,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <Header />
-      <main className="flex-grow container mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <main className="flex-grow">
         <section className="text-center py-12 md:py-20 relative">
           <div
             className="absolute inset-0 opacity-20"
@@ -27,20 +28,22 @@ export default function HomePage() {
             data-ai-hint="travel destinations collage"
           >
           </div>
-          <div className="relative bg-background/80 backdrop-blur-sm p-6 md:p-10 rounded-xl inline-block">
-            <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold font-headline text-primary mb-4 animate-fade-in">
-              Explore the World, Effortlessly
-            </h2>
-            <p className="text-lg sm:text-xl text-foreground/80 max-w-3xl mx-auto mb-8 font-body animate-fade-in animation-delay-200">
-              WanderAI uses cutting-edge AI to plan your perfect getaway. {currentUser ? "Head to your dashboard" : "Login or sign up"} to share your travel dreams,
-              and we&apos;ll handle the details, from must-see sights to hidden gems.
-            </p>
-            <Link
-              href={currentUser ? "/dashboard" : "/auth"}
-              className="inline-block bg-accent hover:bg-accent/90 text-accent-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-md transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-accent/80 focus:ring-offset-2 font-body animate-fade-in animation-delay-400"
-            >
-              {currentUser ? "Go to Dashboard" : "Login to Plan Your Adventure"}
-            </Link>
+          <div className="relative container mx-auto px-4">
+            <div className="bg-background/80 backdrop-blur-sm p-6 md:p-10 rounded-xl inline-block">
+              <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold font-headline text-primary mb-4 animate-fade-in">
+                Explore the World, Effortlessly
+              </h2>
+              <p className="text-lg sm:text-xl text-foreground/80 max-w-3xl mx-auto mb-8 font-body animate-fade-in animation-delay-200">
+                WanderAI uses cutting-edge AI to plan your perfect getaway. {currentUser ? "Head to your dashboard" : "Login or sign up"} to share your travel dreams,
+                and we&apos;ll handle the details, from must-see sights to hidden gems.
+              </p>
+              <Link
+                href={currentUser ? "/dashboard" : "/auth"}
+                className="inline-block bg-accent hover:bg-accent/90 text-accent-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-md transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-accent/80 focus:ring-offset-2 font-body animate-fade-in animation-delay-400"
+              >
+                {currentUser ? "Go to Dashboard" : "Login to Plan Your Adventure"}
+              </Link>
+            </div>
           </div>
         </section>
 
